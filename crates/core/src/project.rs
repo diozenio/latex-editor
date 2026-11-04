@@ -22,7 +22,6 @@ pub enum Engine {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ProjectMeta {
-    /// Stable identity, independent of the folder name. Empty until first scaffolded.
     pub id: String,
     pub main_file: String,
     pub engine: Engine,
@@ -48,7 +47,6 @@ pub struct ProjectSummary {
     pub name: String,
     pub path: String,
     pub meta: ProjectMeta,
-    /// Unix millis of the most recently modified file.
     pub modified: i64,
     pub has_git: bool,
 }
@@ -95,7 +93,6 @@ fn last_modified(dir: &Path) -> i64 {
         .unwrap_or(0)
 }
 
-/// `.git` and `.quilltex/build` are implementation details, not user content.
 pub fn is_internal(path: &Path, project_dir: &Path) -> bool {
     let rel = path.strip_prefix(project_dir).unwrap_or(path);
     let mut comps = rel.components().map(|c| c.as_os_str().to_string_lossy());
@@ -117,7 +114,6 @@ pub fn read_meta(ws: &Workspace, name: &str) -> Result<ProjectMeta> {
 
 pub fn write_meta(ws: &Workspace, name: &str, meta: &ProjectMeta) -> Result<()> {
     let dir = ws.project_dir(name)?;
-    // Callers may hold a copy without the id; never let that erase it.
     let mut meta = meta.clone();
     if meta.id.is_empty() {
         meta.id = read_meta(ws, name).map(|m| m.id).unwrap_or_default();
@@ -127,8 +123,6 @@ pub fn write_meta(ws: &Workspace, name: &str, meta: &ProjectMeta) -> Result<()> 
     Ok(())
 }
 
-/// For folders created outside QuillTex (unzipped, cloned): find the file with
-/// `\documentclass`, preferring main.tex, and the engine the project was set up for.
 fn guess_meta(dir: &Path) -> ProjectMeta {
     let mut meta = ProjectMeta::default();
     let rc = [".latexmkrc", "latexmkrc"].iter().find_map(|f| std::fs::read_to_string(dir.join(f)).ok());
@@ -153,7 +147,6 @@ fn guess_meta(dir: &Path) -> ProjectMeta {
     meta
 }
 
-/// `% !TEX program = lualatex` (TeXShop, VS Code LaTeX Workshop, TeXstudio).
 fn magic_engine(tex: &str) -> Option<Engine> {
     let re = regex::Regex::new(r"(?im)^\s*%\s*!\s*TEX\s+(?:TS-)?program\s*=\s*([a-z]+)").unwrap();
     let head: String = tex.lines().take(30).collect::<Vec<_>>().join("\n");
@@ -165,10 +158,6 @@ fn magic_engine(tex: &str) -> Option<Engine> {
     }
 }
 
-/// A project that brings a latexmkrc was built with TeX Live. Its `$pdf_mode` is no
-/// guide (Overleaf, where most such projects come from, overrides it with the
-/// compiler picked in its menu, pdfLaTeX by default), so go by what the sources
-/// load: only Unicode-engine packages need XeLaTeX or LuaLaTeX.
 fn tex_live_engine(dir: &Path, rc: &str) -> Engine {
     let package = regex::Regex::new(
         r"\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}|\\directlua",
@@ -206,13 +195,11 @@ fn tex_live_engine(dir: &Path, rc: &str) -> Engine {
     }
 }
 
-/// `@default_files = ('thesis.tex');`
 fn latexmkrc_main(rc: &str) -> Option<String> {
     let re = regex::Regex::new(r#"(?m)^\s*@default_files\s*=\s*\(\s*['"]([^'"]+)['"]"#).unwrap();
     re.captures(rc).map(|c| c[1].to_string())
 }
 
-/// Writes `.quilltex/project.json` and makes sure build output is git-ignored.
 pub fn ensure_scaffold(ws: &Workspace, name: &str) -> Result<()> {
     let dir = ws.project_dir(name)?;
     if !dir.join(META_FILE).exists() {
@@ -307,7 +294,6 @@ fn copy_dir(src: &Path, dst: &Path, root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Moves the project to the OS trash so it can be recovered.
 pub fn delete(ws: &Workspace, name: &str) -> Result<()> {
     let dir = ws.project_dir(name)?;
     if !dir.is_dir() {
@@ -316,7 +302,6 @@ pub fn delete(ws: &Workspace, name: &str) -> Result<()> {
     crate::trash::delete(&dir).map_err(|e| Error::Other(e.to_string()))
 }
 
-/// A free name like "Untitled 2" given a base.
 pub fn unique_name(ws: &Workspace, base: &str) -> String {
     let exists = |n: &str| ws.root().join(n).exists();
     if !exists(base) {
@@ -369,7 +354,6 @@ mod tests {
         ensure_scaffold(&ws, "a").unwrap();
         let meta = read_meta(&ws, "a").unwrap();
         assert_eq!(meta.main_file, "thesis.tex");
-        // Overleaf ignores $pdf_mode; nothing here needs LuaLaTeX.
         assert_eq!(meta.engine, Engine::LatexmkPdflatex);
 
         std::fs::create_dir_all(ws.root().join("d/style")).unwrap();

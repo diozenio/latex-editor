@@ -2,8 +2,6 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::{Error, Result};
 
-/// The folder that holds every project. All file access goes through
-/// [`Workspace::resolve`], which refuses anything outside of it.
 #[derive(Debug, Clone)]
 pub struct Workspace {
     root: PathBuf,
@@ -16,7 +14,6 @@ impl Workspace {
         Ok(Self { root: root.canonicalize()? })
     }
 
-    /// `~/Documents/QuillTex`, falling back to `~/QuillTex`.
     pub fn default_root() -> PathBuf {
         dirs::document_dir()
             .or_else(dirs::home_dir)
@@ -33,8 +30,6 @@ impl Workspace {
         Ok(self.root.join(project))
     }
 
-    /// Resolve `rel` inside `project`, rejecting absolute paths, `..`, and
-    /// symlinks that point outside the projects folder.
     pub fn resolve(&self, project: &str, rel: &str) -> Result<PathBuf> {
         let base = self.project_dir(project)?;
         let rel = rel.trim_start_matches("./");
@@ -50,8 +45,6 @@ impl Workspace {
         Ok(out)
     }
 
-    /// Canonicalize the longest existing prefix and make sure it stays inside
-    /// the root (this is what catches symlinks).
     pub fn ensure_inside(&self, path: &Path) -> Result<()> {
         let mut existing = path.to_path_buf();
         while !existing.exists() {
@@ -67,7 +60,6 @@ impl Workspace {
         }
     }
 
-    /// Relative, forward-slash path of `abs` within `project`.
     pub fn relative(&self, project: &str, abs: &Path) -> Result<String> {
         let base = self.project_dir(project)?;
         let rel = abs
@@ -77,8 +69,6 @@ impl Workspace {
     }
 }
 
-/// Project and file names: no separators, no leading dot, nothing Windows
-/// would choke on.
 pub fn validate_name(name: &str) -> Result<()> {
     let bad = name.is_empty()
         || name.len() > 120

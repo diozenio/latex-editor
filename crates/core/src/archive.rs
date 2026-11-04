@@ -3,8 +3,6 @@ use std::path::{Path, PathBuf};
 
 use crate::{project, Error, Result, Workspace};
 
-/// Create a new project from a .zip (Overleaf exports included). If every
-/// entry lives under one top-level folder, that folder is stripped.
 pub fn import_zip(ws: &Workspace, zip_path: &Path, name: &str) -> Result<project::ProjectSummary> {
     let dir = ws.project_dir(name)?;
     if dir.exists() {
@@ -12,7 +10,6 @@ pub fn import_zip(ws: &Workspace, zip_path: &Path, name: &str) -> Result<project
     }
     let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_path)?)?;
 
-    // `enclosed_name` rejects absolute paths and `..` (zip-slip).
     let mut entries: Vec<(usize, PathBuf)> = Vec::new();
     for i in 0..zip.len() {
         let f = zip.by_index(i)?;
@@ -71,7 +68,6 @@ fn common_root(entries: &[(usize, PathBuf)]) -> Option<PathBuf> {
     for (_, p) in entries {
         let mut comps = p.components();
         let top = PathBuf::from(comps.next()?.as_os_str());
-        // A file at the top level means there is no wrapper folder.
         if comps.next().is_none() && !p.to_string_lossy().ends_with('/') {
             return None;
         }
@@ -84,8 +80,6 @@ fn common_root(entries: &[(usize, PathBuf)]) -> Option<PathBuf> {
     first
 }
 
-/// Zip the project into `dest`. Build output is never included; `.git` only
-/// when asked.
 pub fn export_zip(ws: &Workspace, name: &str, dest: &Path, include_git: bool) -> Result<()> {
     let dir = ws.project_dir(name)?;
     if !dir.is_dir() {
@@ -144,7 +138,6 @@ mod tests {
         assert_eq!(s.meta.main_file, "main.tex");
         assert!(ws.root().join("copy/chapters/introduction.tex").exists());
 
-        // Wrapped in a single folder, like many zips are.
         let wrapped = tmp.path().join("wrapped.zip");
         let mut w = zip::ZipWriter::new(std::fs::File::create(&wrapped).unwrap());
         let o = zip::write::SimpleFileOptions::default();

@@ -26,7 +26,6 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-// Errors cross the Tauri IPC boundary as plain strings.
 impl Serialize for Error {
     fn serialize<S: Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
         s.serialize_str(&self.to_string())

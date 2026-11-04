@@ -1,12 +1,3 @@
-//! The app's private TeX Live (a TinyTeX build) behind the pdfLaTeX, XeLaTeX
-//! and LuaLaTeX engines. It lives in the app's data dir, is never added to
-//! PATH and ignores any TeX installed on the computer: only the app's own
-//! child processes see it, with an environment built here.
-//!
-//! TinyTeX ships a small base; whatever else a document needs is installed
-//! with tlmgr: up front for what the sources name, then whenever a compile
-//! reports something missing.
-
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -17,32 +8,21 @@ use crate::compile::hide_console;
 use crate::{Error, Result};
 
 const TINYTEX_VERSION: &str = "2026.11";
-/// Installed right away: helpers latexmk calls for bibliographies, indexes and glossaries.
 const BASE_PACKAGES: &[&str] = &["biber", "makeindex", "glossaries"];
 const READY_MARKER: &str = ".ready";
-/// Left next to the TeX Live folder when the user removes it, so the bundled copy is not set up again on its own.
 const REMOVED_MARKER: &str = "texlive.removed";
-/// Rounds of "install, then install what those packages load" per call.
 const DEPENDENCY_ROUNDS: usize = 4;
-/// Classes and packages read while following what a document loads.
 const MAX_SCANNED: usize = 1000;
-/// Package from the TeX Live of a given year, once that year's repository is frozen.
 const HISTORIC_REPO: &str = "https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/{year}/tlnet-final";
 
-/// Variables a user's shell may set that would point TeX at files outside our tree.
 const TEX_ENV: &[&str] = &[
     "TEXMFHOME", "TEXMFVAR", "TEXMFCONFIG", "TEXMFCNF", "TEXMF", "TEXMFLOCAL", "TEXMFSYSVAR", "TEXMFSYSCONFIG",
     "TEXMFDIST", "TEXINPUTS", "BIBINPUTS", "BSTINPUTS", "TEXFONTS", "TFMFONTS", "ENCFONTS", "LUAINPUTS",
     "TEXFORMATS", "MFINPUTS", "MPINPUTS", "T1FONTS", "VFFONTS", "OPENTYPEFONTS", "TTFONTS",
 ];
 
-/// tlmgr is not safe to run twice at once on the same tree.
 static TLMGR: Mutex<()> = Mutex::new(());
 
-/// Used instead of a project's own `.latexmkrc` (that file is Perl code, and its
-/// output paths would fight ours): glossaries support and enough reruns for
-/// heavy classes like abnTeX2. Subfolders of the build dir are made up front for
-/// `\include{chapters/x}`.
 const LATEXMKRC: &str = r#"$max_repeat = 10;
 $allow_subdir_creation = 2;
 add_cus_dep('glo', 'gls', 0, 'run_makeglossaries');
@@ -55,7 +35,6 @@ sub run_makeglossaries {
 }
 "#;
 
-/// Writes the latexmk configuration and returns its path.
 pub fn latexmkrc(root: &Path) -> Result<PathBuf> {
     let path = root.join("latexmkrc");
     if std::fs::read_to_string(&path).ok().as_deref() != Some(LATEXMKRC) {
@@ -68,7 +47,6 @@ pub fn is_installed(root: &Path) -> bool {
     root.join(READY_MARKER).is_file() && bin_dir(root).is_some()
 }
 
-/// `<root>/bin/<platform>`, the one holding latexmk.
 pub fn bin_dir(root: &Path) -> Option<PathBuf> {
     std::fs::read_dir(root.join("bin"))
         .ok()?
@@ -77,7 +55,6 @@ pub fn bin_dir(root: &Path) -> Option<PathBuf> {
         .find(|d| d.join(exe("latexmk")).is_file())
 }
 
-/// A command for one of the distribution's programs, isolated from any other TeX.
 pub fn command(root: &Path, program: &str) -> Result<Command> {
     let bin = bin_dir(root).ok_or_else(|| Error::Compile("TeX Live is not installed".into()))?;
     let program = bin.join(exe(program));
@@ -89,8 +66,6 @@ fn isolated(bin: PathBuf, program: PathBuf) -> Result<Command> {
     for var in TEX_ENV {
         c.env_remove(var);
     }
-    // latexmk starts lualatex, biber, makeglossaries… by name: ours go first, and
-    // directories holding another TeX are dropped so nothing falls through to it.
     let path = std::env::var_os("PATH").unwrap_or_default();
     let mut paths = vec![bin];
     paths.extend(std::env::split_paths(&path).filter(|d| !has_tex(d)));
@@ -103,8 +78,6 @@ fn has_tex(dir: &Path) -> bool {
     ["kpsewhich", "latex", "tex", "tlmgr"].iter().any(|b| dir.join(exe(b)).is_file())
 }
 
-/// Set up TinyTeX into `root`, from `bundled` (an archive shipped with the app)
-/// when given, otherwise downloaded. Reports progress as short messages.
 pub fn install(root: &Path, bundled: Option<&Path>, status: &dyn Fn(&str)) -> Result<()> {
     let _guard = TLMGR.lock().unwrap_or_else(|e| e.into_inner());
     if is_installed(root) {
@@ -144,8 +117,6 @@ pub fn install(root: &Path, bundled: Option<&Path>, status: &dyn Fn(&str)) -> Re
     let _ = std::fs::remove_dir_all(&stage);
     result?;
 
-    // The bundled tree was set up when the app was built: only the font
-    // configuration, which records where the tree lives, is redone here.
     if root.join(READY_MARKER).is_file() {
         let _ = tlmgr(root, &["postaction", "install", "script", "xetex"]);
         return Ok(());
@@ -170,12 +141,10 @@ pub fn remove(root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Whether the user removed TeX Live (and so does not want it set up unasked).
 pub fn was_removed(root: &Path) -> bool {
     root.parent().is_some_and(|p| p.join(REMOVED_MARKER).is_file())
 }
 
-/// Install TeX Live packages (tlmgr names).
 pub fn install_packages(root: &Path, packages: &[&str]) -> Result<()> {
     let _guard = TLMGR.lock().unwrap_or_else(|e| e.into_inner());
     install_locked(root, packages)
@@ -190,7 +159,6 @@ fn install_locked(root: &Path, packages: &[&str]) -> Result<()> {
             Err(out) if out.contains("tlmgr itself needs to be updated") => {
                 tlmgr(root, &["update", "--self"]).map_err(|out| Error::Compile(last_lines(&out, 6)))?;
             }
-            // A new TeX Live year came out: keep installing from our year's frozen repository.
             Err(out) if out.contains("is older than remote repository") => {
                 let year = release_year(root).ok_or_else(|| Error::Compile(out.clone()))?;
                 tlmgr(root, &["option", "repository", &HISTORIC_REPO.replace("{year}", &year)])
@@ -202,12 +170,6 @@ fn install_locked(root: &Path, packages: &[&str]) -> Result<()> {
     Err(Error::Compile(format!("could not install {}", packages.join(", "))))
 }
 
-/// Installs `packages` along with what loading `files` (e.g. `beamer.cls`)
-/// takes: starting from those files, it follows the classes and packages each
-/// one loads through the tree, and installs whatever is missing in one tlmgr
-/// call per round. Packages in `tried` are skipped, and everything attempted
-/// is added to it. Returns what was installed; fails only when the first
-/// tlmgr call does.
 pub fn install_with_requirements(
     root: &Path,
     mut packages: Vec<String>,
@@ -232,11 +194,9 @@ pub fn install_with_requirements(
             match install_packages(root, &names) {
                 Ok(()) => installed.append(&mut packages),
                 Err(e) if installed.is_empty() => return Err(e),
-                // A later failure is left to the compile, which reports what it really misses.
                 Err(_) => break,
             }
         }
-        // Walk what the files load; the ones the tree lacks are this round's catch.
         let db = local_db(root);
         let paths = installed_paths(&db);
         let mut missing = Vec::new();
@@ -251,7 +211,6 @@ pub fn install_with_requirements(
                     }
                 }
                 None => {
-                    // Looked at again once its package is in.
                     seen.remove(&file);
                     missing.push(file);
                 }
@@ -266,9 +225,6 @@ pub fn install_with_requirements(
     Ok(installed)
 }
 
-/// Installs what the project's sources name (classes, packages, themes, BibTeX
-/// styles) and the tree lacks, before the first compile has to discover each
-/// one. Best effort: the compile loop still catches anything missed here.
 pub fn install_for_project(root: &Path, project: &Path, tried: &mut Vec<String>, status: &dyn Fn(&str)) -> Vec<String> {
     let mut own = HashSet::new();
     let mut wanted = Vec::new();
@@ -291,8 +247,6 @@ pub fn install_for_project(root: &Path, project: &Path, tried: &mut Vec<String>,
     install_with_requirements(root, Vec::new(), wanted, tried, status).unwrap_or_default()
 }
 
-/// Files a TeX source loads by name: classes, packages, beamer themes and BibTeX
-/// styles (`amsmath.sty`, `beamerthememetropolis.sty`, `plain.bst`…).
 pub fn requirements(source: &str) -> Vec<String> {
     use regex::Regex;
     use std::sync::OnceLock;
@@ -335,13 +289,10 @@ fn strip_comment(line: &str) -> &str {
     }
 }
 
-/// The installed packages' database.
 fn local_db(root: &Path) -> String {
     std::fs::read_to_string(root.join("tlpkg").join("texlive.tlpdb")).unwrap_or_default()
 }
 
-/// Calls `f(package, path)` for every run file listed in a tlpdb. Paths are as
-/// written there: `texmf-dist/…` in the local one, `RELOC/…` in the catalogue.
 fn runfiles(tlpdb: &str, mut f: impl FnMut(&str, &str)) {
     let (mut package, mut in_runfiles) = ("", false);
     for line in tlpdb.lines() {
@@ -358,7 +309,6 @@ fn runfiles(tlpdb: &str, mut f: impl FnMut(&str, &str)) {
     }
 }
 
-/// File name → path (under the root) of everything the local tree (`db`) has.
 fn installed_paths(db: &str) -> HashMap<String, String> {
     let mut paths = HashMap::new();
     runfiles(db, |_, path| {
@@ -367,8 +317,6 @@ fn installed_paths(db: &str) -> HashMap<String, String> {
     paths
 }
 
-/// Packages that ship whichever of `files` the local tree lacks. Files the
-/// catalogue does not know (the project's own, typos) are left out.
 fn packages_for(root: &Path, installed: &HashMap<String, String>, files: &[String]) -> Vec<String> {
     let missing: Vec<&String> = files.iter().filter(|f| !installed.contains_key(*f)).collect();
     if missing.is_empty() {
@@ -381,9 +329,6 @@ fn packages_for(root: &Path, installed: &HashMap<String, String>, files: &[Strin
     out
 }
 
-/// File name → package for all of TeX Live, read from the copy of the remote
-/// database tlmgr keeps after talking to the repository
-/// (`tlpkg/texlive.tlpdb.main.<hash>`), so lookups need no network.
 fn catalogue(root: &Path) -> Option<Arc<HashMap<String, String>>> {
     type Cached = (PathBuf, SystemTime, Arc<HashMap<String, String>>);
     static CACHE: Mutex<Option<Cached>> = Mutex::new(None);
@@ -410,7 +355,6 @@ fn catalogue(root: &Path) -> Option<Arc<HashMap<String, String>>> {
     Some(map)
 }
 
-/// Uninstall TeX Live packages (tlmgr names).
 pub fn remove_packages(root: &Path, packages: &[&str]) -> Result<()> {
     let _guard = TLMGR.lock().unwrap_or_else(|e| e.into_inner());
     let mut args = vec!["remove"];
@@ -418,15 +362,12 @@ pub fn remove_packages(root: &Path, packages: &[&str]) -> Result<()> {
     tlmgr(root, &args).map(|_| ()).map_err(|out| Error::Compile(last_lines(&out, 6)))
 }
 
-/// Which package ships `file` (e.g. `abntex2.cls`): from the local catalogue
-/// when there is one, otherwise asked of the online repository.
 pub fn package_for_file(root: &Path, file: &str) -> Option<String> {
     if let Some(package) = catalogue(root).and_then(|c| c.get(file).cloned()) {
         return Some(package);
     }
     let _guard = TLMGR.lock().unwrap_or_else(|e| e.into_inner());
     let out = tlmgr(root, &["search", "--global", "--file", &format!("/{file}")]).ok()?;
-    // "pkg:" lines, each followed by indented paths.
     let mut current: Option<&str> = None;
     for line in out.lines() {
         if let Some(pkg) = line.strip_suffix(':').filter(|l| !l.starts_with(char::is_whitespace) && !l.contains(' ')) {
@@ -441,14 +382,10 @@ pub fn package_for_file(root: &Path, file: &str) -> Option<String> {
     None
 }
 
-/// What a failed run is missing, from its console output or log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Missing {
-    /// A file to look up (`foo.sty`, `ecrm1000.tfm`).
     File(String),
-    /// A package known by name.
     Package(String),
-    /// A babel language: its `babel-*` package, plus hyphenation patterns when they exist.
     Language(String),
 }
 
@@ -495,9 +432,6 @@ pub fn find_missing(log: &str) -> Option<Missing> {
     None
 }
 
-/// Packages a successful build did without but which change its output, the way a
-/// full TeX Live (Overleaf) would typeset it: hyphenation patterns and glossaries'
-/// language modules.
 pub fn find_optional(log: &str) -> Vec<String> {
     use regex::Regex;
     use std::sync::OnceLock;
@@ -520,7 +454,6 @@ pub fn find_optional(log: &str) -> Vec<String> {
     out
 }
 
-/// babel's language options → the `babel-*` package that defines them.
 fn babel_package(lang: &str) -> &str {
     match lang {
         "brazil" | "brazilian" | "portuguese" | "portuges" => "portuges",
@@ -534,7 +467,6 @@ fn babel_package(lang: &str) -> &str {
     }
 }
 
-/// TeX Live packages for a babel language (`portuges` → babel-portuges, hyphen-portuguese).
 pub fn language_packages(lang: &str) -> (String, Option<String>) {
     let hyphen = match lang {
         "english" => None,
@@ -550,7 +482,6 @@ fn release_year(root: &Path) -> Option<String> {
     re.captures(&text).map(|c| c[1].to_string())
 }
 
-/// Runs tlmgr; Err carries its output so callers can tell failures apart.
 fn tlmgr(root: &Path, args: &[&str]) -> std::result::Result<String, String> {
     let bin = bin_dir(root).ok_or("TeX Live is not installed")?;
     let program = bin.join(if cfg!(windows) { "tlmgr.bat" } else { "tlmgr" });
@@ -611,8 +542,6 @@ fn download(url: &str, dest: &Path, status: &dyn Fn(&str)) -> Result<()> {
 }
 
 fn unpack(archive: &Path, into: &Path) -> Result<()> {
-    // Windows downloads are self-extracting 7-Zip archives; system tar handles
-    // everything else (.tar.xz, and the .zip the app bundles on Windows).
     let mut cmd = if archive.extension().is_some_and(|e| e == "exe") {
         let mut c = Command::new(archive);
         c.arg("-y");

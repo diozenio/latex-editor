@@ -8,7 +8,6 @@ use crate::{paths::validate_name, project::is_internal, Error, Result, Workspace
 #[serde(rename_all = "camelCase")]
 pub struct FileNode {
     pub name: String,
-    /// Forward-slash path relative to the project.
     pub path: String,
     pub is_dir: bool,
     pub size: u64,
@@ -30,7 +29,6 @@ fn walk(dir: &Path, root: &Path) -> Result<Vec<FileNode>> {
         let entry = entry?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        // Hide internals and dotfiles except .gitignore / .latexmkrc.
         if is_internal(&path, root) || name == ".quilltex" || name == ".DS_Store" {
             continue;
         }
@@ -76,15 +74,12 @@ pub fn write_text(ws: &Workspace, project: &str, rel: &str, content: &str) -> Re
 pub fn write_bytes(ws: &Workspace, project: &str, rel: &str, content: &[u8]) -> Result<()> {
     let p = ws.resolve(project, rel)?;
     check_leaf(&p)?;
-    // A write aimed at a renamed or deleted project must not bring its folder back.
     if !ws.project_dir(project)?.is_dir() {
         return Err(Error::NotFound(format!("project {project}")));
     }
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    // Write to a sibling temp file then rename, so editors and the watcher
-    // never observe a half-written file.
     let tmp = p.with_extension(format!(
         "{}.quilltex-tmp",
         p.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default()
@@ -94,7 +89,6 @@ pub fn write_bytes(ws: &Workspace, project: &str, rel: &str, content: &[u8]) -> 
     Ok(())
 }
 
-/// Replace exactly one occurrence of `old` with `new`.
 pub fn edit_text(ws: &Workspace, project: &str, rel: &str, old: &str, new: &str) -> Result<()> {
     let text = read_text(ws, project, rel)?;
     match text.matches(old).count() {
@@ -128,7 +122,6 @@ pub fn rename(ws: &Workspace, project: &str, from: &str, to: &str) -> Result<()>
     Ok(())
 }
 
-/// Moves to the OS trash.
 pub fn delete(ws: &Workspace, project: &str, rel: &str) -> Result<()> {
     let p = ws.resolve(project, rel)?;
     if p == ws.project_dir(project)? {
@@ -140,7 +133,6 @@ pub fn delete(ws: &Workspace, project: &str, rel: &str) -> Result<()> {
     crate::trash::delete(&p).map_err(|e| Error::Other(e.to_string()))
 }
 
-/// Copy a file from anywhere on disk into the project (drag-and-drop upload).
 pub fn import_file(ws: &Workspace, project: &str, src: &Path, dest_dir: &str) -> Result<String> {
     let name = src
         .file_name()

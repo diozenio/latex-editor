@@ -1,5 +1,3 @@
-//! Starter content for new projects.
-
 pub const TEMPLATES: &[(&str, &str)] = &[
     ("blank", "Blank"),
     ("article", "Article"),

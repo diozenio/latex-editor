@@ -1,12 +1,3 @@
-//! Prepares the engine files the app bundles, by compiling every project
-//! template with both engines (run by `scripts/fetch-sidecars.mjs`):
-//!   <work>/tectonic-cache  Tectonic's cache holding what the templates need
-//!   <work>/TinyTeX         TeX Live set up from <archive>, with the templates' packages
-//!                          (biber left out: ~85 MB that hardly compresses; it is
-//!                          installed when a project first needs it)
-//!
-//! Usage: prepare-engines <work> <tectonic> <tinytex-archive>
-
 use std::path::PathBuf;
 
 use quilltex_core::compile::{compile_with, Toolchain};

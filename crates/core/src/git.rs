@@ -1,7 +1,3 @@
-//! Git through the system `git`, so the user's own config, credential
-//! helpers and SSH keys apply. For github.com, a logged-in GitHub CLI is
-//! used as the credential helper (see `gh::git_credential_args`).
-
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
@@ -13,7 +9,6 @@ use crate::{gh, Error, Result, Workspace};
 #[serde(rename_all = "camelCase")]
 pub struct FileStatus {
     pub path: String,
-    /// "new" | "modified" | "deleted" | "renamed" | "typechange" | "conflicted"
     pub kind: String,
     pub staged: bool,
     pub unstaged: bool,
@@ -40,7 +35,6 @@ pub struct Commit {
     pub summary: String,
     pub author: String,
     pub time: i64,
-    /// Reachable from a remote branch, so rewriting it would diverge.
     pub pushed: bool,
 }
 
@@ -48,7 +42,6 @@ pub struct Commit {
 #[serde(rename_all = "camelCase")]
 pub struct CommitFile {
     pub path: String,
-    /// "new" | "modified" | "deleted" | "typechange"
     pub kind: String,
 }
 
@@ -69,10 +62,8 @@ pub enum MergeOutcome {
     Conflicts { files: Vec<String> },
 }
 
-/// A git invocation in one project folder.
 struct Git<'a> {
     dir: &'a Path,
-    /// Network operations get credentials from `gh`.
     remote: bool,
 }
 
@@ -85,7 +76,6 @@ impl Git<'_> {
         c.args(args)
             .current_dir(self.dir)
             .stdin(Stdio::null())
-            // Never block on a prompt nobody can see; keep messages parseable.
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("LC_ALL", "C");
         crate::compile::hide_console(&mut c);
@@ -99,7 +89,6 @@ impl Git<'_> {
         })
     }
 
-    /// Run and return stdout; a non-zero exit becomes an error.
     fn run(&self, args: &[&str]) -> Result<String> {
         let out = self.output(args)?;
         if !out.status.success() {
@@ -108,7 +97,6 @@ impl Git<'_> {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
-    /// Run and report only whether it succeeded.
     fn ok(&self, args: &[&str]) -> bool {
         self.output(args).is_ok_and(|o| o.status.success())
     }
@@ -135,7 +123,6 @@ fn failure(out: &Output) -> Error {
 }
 
 fn open<'a>(dir: &'a Path) -> Result<Git<'a>> {
-    // Only the project folder itself counts, never a repo further up.
     if !dir.join(".git").exists() {
         return Err(Error::Git("not a git repository".into()));
     }
@@ -152,8 +139,6 @@ pub fn init(ws: &Workspace, project: &str, name: &str, email: &str) -> Result<()
     set_identity(&open(&dir)?, name, email)
 }
 
-/// Stored in the repo's own .git/config, not ~/.gitconfig. Empty values are
-/// left alone so the user's global identity applies.
 pub fn set_identity_for(ws: &Workspace, project: &str, name: &str, email: &str) -> Result<()> {
     let dir = ws.project_dir(project)?;
     set_identity(&open(&dir)?, name, email)
@@ -169,7 +154,6 @@ fn set_identity(git: &Git, name: &str, email: &str) -> Result<()> {
     Ok(())
 }
 
-/// The identity git would use here (repo config, then global).
 pub fn configured_identity(ws: &Workspace, project: &str) -> (Option<String>, Option<String>) {
     let Ok(dir) = ws.project_dir(project) else { return (None, None) };
     let git = Git { dir: &dir, remote: false };
@@ -185,7 +169,6 @@ fn ref_exists(git: &Git, refname: &str) -> bool {
 }
 
 fn head_branch(git: &Git) -> Option<String> {
-    // Works on unborn branches too.
     git.line(&["symbolic-ref", "-q", "--short", "HEAD"])
 }
 
@@ -231,7 +214,7 @@ pub fn status(ws: &Workspace, project: &str) -> Result<RepoStatus> {
         } else if let Some(rest) = e.strip_prefix("2 ") {
             let f: Vec<&str> = rest.splitn(9, ' ').collect();
             files.push(entry(f[0], f[8]));
-            entries.next(); // original path
+            entries.next();
         } else if let Some(rest) = e.strip_prefix("u ") {
             let f: Vec<&str> = rest.splitn(10, ' ').collect();
             files.push(FileStatus { path: f[9].into(), kind: "conflicted".into(), staged: false, unstaged: true });
@@ -243,11 +226,9 @@ pub fn status(ws: &Workspace, project: &str) -> Result<RepoStatus> {
     if let (Some(b), None) = (&branch, &upstream) {
         let origin_ref = format!("refs/remotes/origin/{b}");
         if ref_exists(&git, &origin_ref) {
-            // No tracking configured yet but origin/<branch> exists.
             upstream = Some(format!("origin/{b}"));
             (ahead, behind) = ahead_behind(&git, &format!("origin/{b}"))?;
         } else if remote_url.is_some() && has_head(&git) {
-            // Branch never pushed: everything is "ahead".
             ahead = git.run(&["rev-list", "--count", "HEAD"])?.trim().parse().unwrap_or(0);
         }
     }
@@ -263,7 +244,6 @@ pub fn status(ws: &Workspace, project: &str) -> Result<RepoStatus> {
     })
 }
 
-/// One porcelain v2 changed entry; `xy` is index + worktree status.
 fn entry(xy: &str, path: &str) -> FileStatus {
     let (x, y) = (xy.as_bytes()[0], xy.as_bytes()[1]);
     let has = |c: u8| x == c || y == c;
@@ -307,7 +287,6 @@ pub fn unstage(ws: &Workspace, project: &str, paths: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Throw away working-tree changes for the given paths.
 pub fn discard(ws: &Workspace, project: &str, paths: &[String]) -> Result<()> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -338,7 +317,6 @@ fn conflicted(git: &Git) -> Vec<String> {
         .collect()
 }
 
-/// Fallback identity so a commit never fails for lack of one.
 fn identity_args(git: &Git) -> Vec<&'static str> {
     let mut args = Vec::new();
     if git.line(&["config", "user.name"]).is_none() {
@@ -400,7 +378,6 @@ pub fn log(ws: &Workspace, project: &str, limit: usize) -> Result<Vec<Commit>> {
         .collect())
 }
 
-/// Full id of a commit, rejecting anything that isn't a plain hex id.
 fn resolve_commit(git: &Git, id: &str) -> Result<String> {
     if id.len() < 4 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(Error::NotFound(format!("commit {id}")));
@@ -409,7 +386,6 @@ fn resolve_commit(git: &Git, id: &str) -> Result<String> {
         .ok_or_else(|| Error::NotFound(format!("commit {id}")))
 }
 
-/// Files a commit changed (against its first parent, if any).
 pub fn commit_files(ws: &Workspace, project: &str, id: &str) -> Result<Vec<CommitFile>> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -431,7 +407,6 @@ pub fn commit_files(ws: &Workspace, project: &str, id: &str) -> Result<Vec<Commi
     Ok(files)
 }
 
-/// Unified diff of one file in a commit.
 pub fn commit_diff(ws: &Workspace, project: &str, id: &str, path: &str) -> Result<String> {
     ws.resolve(project, path)?;
     let dir = ws.project_dir(project)?;
@@ -440,7 +415,6 @@ pub fn commit_diff(ws: &Workspace, project: &str, id: &str, path: &str) -> Resul
     git.run(&["show", "--format=", "--no-color", "--no-ext-diff", "-m", "--first-parent", &id, "--", path])
 }
 
-/// Unified diff of the working tree vs HEAD for a single file.
 pub fn diff_file(ws: &Workspace, project: &str, path: &str) -> Result<String> {
     ws.resolve(project, path)?;
     let dir = ws.project_dir(project)?;
@@ -449,7 +423,6 @@ pub fn diff_file(ws: &Workspace, project: &str, path: &str) -> Result<String> {
     let out = if in_head {
         git.output(&["diff", "--no-color", "--no-ext-diff", "HEAD", "--", path])?
     } else {
-        // New file: show its whole content as added. Exit code 1 = "differs".
         git.output(&["diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", path])?
     };
     if out.status.code().is_some_and(|c| c > 1) {
@@ -491,8 +464,6 @@ pub fn create_branch(ws: &Workspace, project: &str, name: &str, checkout: bool) 
     Ok(())
 }
 
-/// Switch branches. A remote branch name (origin/x) creates a tracking
-/// local branch.
 pub fn checkout_branch(ws: &Workspace, project: &str, name: &str) -> Result<()> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -522,7 +493,6 @@ pub fn delete_branch(ws: &Workspace, project: &str, name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Merge `from` (local or remote-tracking branch) into HEAD.
 pub fn merge(ws: &Workspace, project: &str, from: &str) -> Result<MergeOutcome> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -554,7 +524,6 @@ fn merge_ref(git: &Git, theirs: &str, label: &str) -> Result<MergeOutcome> {
     Ok(MergeOutcome::Merged { commit: git.run(&["rev-parse", "HEAD"])?.trim().to_string() })
 }
 
-/// Mark a conflicted file as resolved (stage its current content).
 pub fn resolve(ws: &Workspace, project: &str, path: &str) -> Result<()> {
     let text = std::fs::read_to_string(ws.resolve(project, path)?).unwrap_or_default();
     if text.contains("<<<<<<<") && text.contains(">>>>>>>") {
@@ -595,7 +564,6 @@ pub fn fetch(ws: &Workspace, project: &str) -> Result<()> {
     Ok(())
 }
 
-/// Fetch + merge origin/<branch> into the current branch.
 pub fn pull(ws: &Workspace, project: &str) -> Result<MergeOutcome> {
     fetch(ws, project)?;
     let dir = ws.project_dir(project)?;
@@ -635,17 +603,12 @@ fn ensure_upstream(git: &Git, branch: &str) {
     }
 }
 
-/// Clone into a new project folder.
 pub fn clone(ws: &Workspace, url: &str, project: &str) -> Result<()> {
     let dir = ws.project_dir(project)?;
     if dir.exists() {
         return Err(Error::AlreadyExists(project.into()));
     }
-    // Clone into a hidden staging folder and move it into place only once checkout is done.
-    // Project listing scaffolds every visible folder (writing `.gitignore` and
-    // `.quilltex/project.json`), which would race the checkout of a half-cloned repo.
     let staging = ws.root().join(format!(".clone-{}", uuid::Uuid::new_v4()));
-    // `canonicalize` yields `\\?\` paths on Windows, which git refuses as a clone target.
     let shown = staging.display().to_string();
     let target = match shown.strip_prefix(r"\\?\UNC\") {
         Some(rest) => format!(r"\\{rest}"),
@@ -777,7 +740,6 @@ mod tests {
             .unwrap();
         let url = bare.to_string_lossy().to_string();
 
-        // The scaffold files are tracked, so writing them mid-clone would break checkout.
         crate::project::create(&ws, "a", "blank").unwrap();
         init(&ws, "a", "A", "a@x").unwrap();
         stage_all(&ws, "a").unwrap();
@@ -794,9 +756,6 @@ mod tests {
     }
 }
 
-// ---------- rewriting history ----------
-
-/// History actions start from a tree with no uncommitted work to lose.
 fn require_clean(git: &Git, dir: &Path) -> Result<()> {
     if dir.join(".git/MERGE_HEAD").exists() {
         return Err(Error::Other("finish or abort the merge first".into()));
@@ -811,7 +770,6 @@ fn is_pushed(git: &Git, commit: &str) -> bool {
     git.line(&["branch", "-r", "--contains", commit]).is_some()
 }
 
-/// A commit that is in HEAD's history.
 fn resolve_in_history(git: &Git, id: &str) -> Result<String> {
     let id = resolve_commit(git, id)?;
     if !git.ok(&["merge-base", "--is-ancestor", &id, "HEAD"]) {
@@ -820,8 +778,6 @@ fn resolve_in_history(git: &Git, id: &str) -> Result<String> {
     Ok(id)
 }
 
-/// Make the files match an earlier commit and record that as a new commit,
-/// so nothing is lost from the history.
 pub fn restore_version(ws: &Workspace, project: &str, id: &str) -> Result<String> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -834,7 +790,6 @@ pub fn restore_version(ws: &Workspace, project: &str, id: &str) -> Result<String
     commit(ws, project, &format!("Restore version {}", &id[..7]))
 }
 
-/// Add a commit that undoes the given one.
 pub fn revert_commit(ws: &Workspace, project: &str, id: &str) -> Result<String> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -853,7 +808,6 @@ pub fn revert_commit(ws: &Workspace, project: &str, id: &str) -> Result<String> 
     Ok(git.run(&["rev-parse", "HEAD"])?.trim().to_string())
 }
 
-/// Move the branch back to a commit, dropping everything after it.
 pub fn reset_to(ws: &Workspace, project: &str, id: &str) -> Result<()> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -870,7 +824,6 @@ pub fn reset_to(ws: &Workspace, project: &str, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Remove one commit, replaying the later ones on top of its parent.
 pub fn delete_commit(ws: &Workspace, project: &str, id: &str) -> Result<()> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -907,7 +860,6 @@ mod history_tests {
     use super::*;
     use crate::files::write_text;
 
-    /// Project "p" with commits c1..c4, each adding fN.txt; returns ids newest first.
     fn history() -> (tempfile::TempDir, Workspace, Vec<String>) {
         let tmp = tempfile::tempdir().unwrap();
         let ws = Workspace::new(tmp.path()).unwrap();
@@ -943,13 +895,13 @@ mod history_tests {
         let dir = ws.project_dir("p").unwrap();
         assert!(dir.join("f2.txt").exists() && !dir.join("f3.txt").exists());
         assert_eq!(summaries(&ws).len(), 5);
-        assert!(restore_version(&ws, "p", &ids[2]).is_err()); // already there
+        assert!(restore_version(&ws, "p", &ids[2]).is_err());
     }
 
     #[test]
     fn delete_middle_and_head() {
         let (_t, ws, ids) = history();
-        delete_commit(&ws, "p", &ids[1]).unwrap(); // c3
+        delete_commit(&ws, "p", &ids[1]).unwrap();
         assert_eq!(summaries(&ws)[..3], ["c4", "c2", "c1"].map(String::from));
         assert!(!ws.project_dir("p").unwrap().join("f3.txt").exists());
         let head = log(&ws, "p", 1).unwrap().remove(0).id;
@@ -962,7 +914,7 @@ mod history_tests {
     #[test]
     fn reset_and_revert() {
         let (_t, ws, ids) = history();
-        revert_commit(&ws, "p", &ids[2]).unwrap(); // undo c2
+        revert_commit(&ws, "p", &ids[2]).unwrap();
         assert!(!ws.project_dir("p").unwrap().join("f2.txt").exists());
         reset_to(&ws, "p", &ids[2]).unwrap();
         assert_eq!(summaries(&ws)[0], "c2");

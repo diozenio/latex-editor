@@ -1,5 +1,3 @@
-//! Minimal SyncTeX reader: enough for editor ↔ PDF jumps.
-
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
@@ -13,7 +11,6 @@ struct Record {
     tag: u32,
     line: u32,
     page: u32,
-    /// PDF points, origin at the top-left of the page.
     x: f64,
     y: f64,
     w: f64,
@@ -38,7 +35,6 @@ pub struct SourceSpot {
 }
 
 pub struct SyncTex {
-    /// tag → path relative to the project
     inputs: HashMap<u32, String>,
     records: Vec<Record>,
 }
@@ -84,7 +80,6 @@ impl SyncTex {
                 }
                 continue;
             }
-            // Inputs can also appear inside content.
             if let Some(rest) = line.strip_prefix("Input:") {
                 if let Some((tag, path)) = rest.split_once(':') {
                     if let Ok(tag) = tag.parse() {
@@ -131,14 +126,12 @@ impl SyncTex {
         Self { inputs, records }
     }
 
-    /// Source line → places in the PDF (all on the first matching page).
     pub fn forward(&self, file: &str, line: u32) -> Vec<PdfSpot> {
         let tags: Vec<u32> = self.inputs.iter().filter(|(_, p)| p.as_str() == file).map(|(t, _)| *t).collect();
         let candidates: Vec<&Record> = self.records.iter().filter(|r| tags.contains(&r.tag) && r.line > 0).collect();
         if candidates.is_empty() {
             return vec![];
         }
-        // Exact line, else the closest line after, else the closest before.
         let best_line = candidates
             .iter()
             .map(|r| r.line)
@@ -158,7 +151,6 @@ impl SyncTex {
         spots
     }
 
-    /// Click in the PDF (points, top-left origin) → source line.
     pub fn inverse(&self, page: u32, x: f64, y: f64) -> Option<SourceSpot> {
         let on_page = self.records.iter().filter(|r| r.page == page && r.line > 0);
         let containing = on_page

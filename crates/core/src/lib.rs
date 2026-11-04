@@ -1,6 +1,3 @@
-//! QuillTex core: everything that touches disk lives here so the desktop app and
-//! the MCP server share the exact same rules (and the same sandbox).
-
 pub mod archive;
 pub mod compile;
 pub mod error;

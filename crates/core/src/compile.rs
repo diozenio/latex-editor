@@ -10,27 +10,16 @@ use crate::{texlive, Error, Result, Workspace};
 
 const TIMEOUT: Duration = Duration::from_secs(300);
 
-/// Missing-package installs tried per compile before giving up.
 const MAX_INSTALLS: usize = 60;
 
-/// Where to find TeX. Both engines belong to the app: Tectonic ships as a
-/// sidecar, and TeX Live is unpacked (or downloaded) into the app's data dir.
-/// A TeX installed on the computer is never used.
 #[derive(Debug, Clone, Default)]
 pub struct Toolchain {
     pub tectonic: Option<PathBuf>,
-    /// Kept inside the app's own cache dir so uninstalling removes it.
     pub tectonic_cache: Option<PathBuf>,
-    /// Root of the app's private TeX Live (may not be installed yet).
     pub texlive: Option<PathBuf>,
-    /// TeX Live archive shipped with the app; without it TeX Live is downloaded.
     pub texlive_archive: Option<PathBuf>,
 }
 
-/// Copies a Tectonic cache shipped with the app (the files the project
-/// templates need) into `cache`, so new projects compile without the network.
-/// Files already there are kept; each copy lands under a temporary name and is
-/// renamed into place, so a compile running meanwhile never sees half a file.
 pub fn seed_tectonic_cache(seed: &Path, cache: &Path) -> Result<()> {
     for entry in walkdir::WalkDir::new(seed).into_iter().flatten().filter(|e| e.file_type().is_file()) {
         let rel = entry.path().strip_prefix(seed).unwrap();
@@ -69,7 +58,6 @@ pub struct Diagnostic {
 #[serde(rename_all = "camelCase")]
 pub struct CompileResult {
     pub ok: bool,
-    /// Relative to the project, e.g. `.quilltex/build/main.pdf`.
     pub pdf: Option<String>,
     pub log: String,
     pub diagnostics: Vec<Diagnostic>,
@@ -80,7 +68,6 @@ pub fn compile(ws: &Workspace, name: &str, tc: &Toolchain) -> Result<CompileResu
     compile_with(ws, name, tc, &|_| {})
 }
 
-/// Like `compile`, reporting slow steps (setting up TeX Live, installing packages) to `status`.
 pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(&str)) -> Result<CompileResult> {
     let dir = ws.project_dir(name)?;
     let meta = project::read_meta(ws, name)?;
@@ -125,7 +112,6 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
             };
             let latexmk = |force: bool| -> Result<Command> {
                 let mut c = texlive::command(&root, "latexmk")?;
-                // -norc: a project's .latexmkrc is Perl that would run with the user's rights.
                 c.arg("-norc").arg("-r").arg(&rc);
                 if force {
                     c.arg("-g");
@@ -142,13 +128,11 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
                     notes.push_str(&format!("QuillTex: installed TeX package `{p}`\n"));
                 }
             };
-            // What the sources name goes in up front, in one batch…
             let installed = texlive::install_for_project(&root, &dir, &mut tried, status);
             note(&mut notes, &installed);
             if !installed.is_empty() {
                 status("Compiling…");
             }
-            // …then each failed run names the next missing file; install it and go again.
             let mut outcome = run(latexmk(false)?, &dir)?;
             while !outcome.0 && tried.len() < MAX_INSTALLS {
                 let log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
@@ -157,7 +141,6 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
                     texlive::Missing::Package(p) => Some(p.clone()),
                     texlive::Missing::Language(lang) => {
                         let (babel, hyphen) = texlive::language_packages(lang);
-                        // Patterns are optional: without them the document still builds, unhyphenated.
                         if let Some(h) = hyphen.filter(|h| !tried.contains(h)) {
                             if texlive::install_packages(&root, &[&h]).is_ok() {
                                 notes.push_str(&format!("QuillTex: installed TeX package `{h}`\n"));
@@ -186,8 +169,6 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
                 status("Compiling…");
                 outcome = run(latexmk(true)?, &dir)?;
             }
-            // Built, but without packages a full TeX Live has that change the result
-            // (line breaks, glossary titles): add them and build once more.
             if outcome.0 {
                 let log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
                 let mut installed = Vec::new();
@@ -207,7 +188,6 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
         }
     };
 
-    // Prefer the full TeX log; fall back to console output.
     let tex_log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
     let mut diagnostics = parse_log(&console);
     for d in parse_log(&tex_log) {
@@ -233,11 +213,9 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
     })
 }
 
-/// Runs a compiler in `dir`; returns whether it succeeded and its console output.
 fn run(mut cmd: Command, dir: &Path) -> Result<(bool, String)> {
     cmd.current_dir(dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| Error::Compile(format!("failed to start compiler: {e}")))?;
-    // Drain pipes on threads so a chatty compiler can't deadlock us.
     let mut so = child.stdout.take().unwrap();
     let mut se = child.stderr.take().unwrap();
     let t1 = std::thread::spawn(move || read_all(&mut so));
@@ -254,7 +232,6 @@ fn run(mut cmd: Command, dir: &Path) -> Result<(bool, String)> {
     Ok((status.success(), console))
 }
 
-/// Remove build output.
 pub fn clean(ws: &Workspace, name: &str) -> Result<()> {
     let out = ws.project_dir(name)?.join(BUILD_DIR);
     if out.exists() {
@@ -277,7 +254,7 @@ fn exe(name: &str) -> String {
 #[cfg(windows)]
 pub(crate) fn hide_console(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
-    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    cmd.creation_flags(0x0800_0000);
 }
 #[cfg(not(windows))]
 pub(crate) fn hide_console(_: &mut Command) {}
@@ -319,7 +296,6 @@ pub fn parse_log(log: &str) -> Vec<Diagnostic> {
                 "warning" => Severity::Warning,
                 _ => Severity::Info,
             };
-            // Tectonic's "warning: file:line: msg" form.
             let msg = c[2].to_string();
             let (file, ln, msg) = match file_line.captures(&msg) {
                 Some(fc) => (Some(fc[1].to_string()), fc[2].parse().ok(), fc[3].to_string()),
@@ -330,7 +306,6 @@ pub fn parse_log(log: &str) -> Vec<Diagnostic> {
             }
             push(Diagnostic { severity: sev, file, line: ln, message: msg });
         } else if let Some(c) = bang.captures(line) {
-            // Classic TeX error: "! msg" … "l.42 context".
             let ln = lines[i + 1..]
                 .iter()
                 .take(12)
@@ -388,7 +363,6 @@ l.99 \\end
         assert_eq!(d[5].line, Some(99));
     }
 
-    /// Runs only when a tectonic binary is reachable (QUILLTEX_TECTONIC or PATH).
     #[test]
     fn compiles_with_tectonic() {
         let bin = std::env::var_os("QUILLTEX_TECTONIC").map(PathBuf::from).or_else(|| {
@@ -405,7 +379,6 @@ l.99 \\end
         assert!(ws.root().join("p/.quilltex/build/main.synctex.gz").exists());
     }
 
-    /// Downloads TeX Live on first run, so only when QUILLTEX_TEXLIVE names its folder.
     #[test]
     fn compiles_with_texlive_installing_packages() {
         let Some(root) = std::env::var_os("QUILLTEX_TEXLIVE").map(PathBuf::from) else { return };
@@ -413,7 +386,6 @@ l.99 \\end
         let ws = Workspace::new(tmp.path()).unwrap();
         std::fs::create_dir_all(ws.root().join("p")).unwrap();
         std::fs::write(ws.root().join("p/.latexmkrc"), "$pdf_mode = 4;\n").unwrap();
-        // lipsum is not in the base install.
         std::fs::write(
             ws.root().join("p/main.tex"),
             "\\documentclass{article}\\usepackage{lipsum}\\begin{document}\\lipsum[1]\\end{document}\n",
