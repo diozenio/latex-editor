@@ -35,7 +35,7 @@ struct ChatDone {
     error: Option<String>,
 }
 
-fn claude_bin(state: &AppState) -> CmdResult<std::path::PathBuf> {
+pub(crate) fn claude_bin(state: &AppState) -> CmdResult<std::path::PathBuf> {
     crate::env::find_claude(&state.settings().claude_path)
         .ok_or_else(|| "Claude Code CLI not found. Install it from https://claude.com/claude-code and sign in.".into())
 }
@@ -118,6 +118,9 @@ pub fn chat_send(
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if let Ok(event) = serde_json::from_str::<Value>(&line) {
+                if let Some(state) = tauri::Manager::try_state::<AppState>(&app) {
+                    crate::usage::remember(&state, &event);
+                }
                 let _ = app.emit("chat-event", ChatEvent { chat_id: chat_id.clone(), event });
             }
         }

@@ -5,6 +5,7 @@ mod github;
 mod state;
 mod sync;
 mod uninstall;
+mod usage;
 mod watcher;
 
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -176,6 +177,7 @@ pub fn run() {
             chat::chat_cancel,
             chat::chat_load,
             chat::chat_save,
+            usage::claude_usage,
             chat::mcp_register,
             chat::mcp_unregister,
         ])
