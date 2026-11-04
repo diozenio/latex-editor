@@ -1025,6 +1025,7 @@ name = "folio"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "dirs 6.0.0",
  "folio-core",
  "notify",
@@ -1034,6 +1035,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "tempfile",
  "tokio",
  "window-vibrancy 0.6.0",
 ]
@@ -1051,6 +1053,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "trash",
+ "uuid",
  "wait-timeout",
  "walkdir",
  "zip",
