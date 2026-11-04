@@ -33,8 +33,8 @@ cargo test -p quilltex-core -p quilltex-mcp
 pnpm app:build      # .app/.dmg on macOS, NSIS .exe on Windows, .deb/.AppImage on Linux
 ```
 
-CI (`.github/workflows/release.yml`) builds all platforms when a release is created. Versions, changelog and tags are
-automated from Conventional Commits; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Every push to `main` builds all platforms (`.github/workflows/release.yml`) and publishes them as the latest release.
+The version is `major.minor` from `src-tauri/tauri.conf.json` plus the workflow run number as the patch.
 
 ## GitHub setup
 
