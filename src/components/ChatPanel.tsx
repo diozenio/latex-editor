@@ -138,6 +138,15 @@ function ensureListeners() {
   });
 }
 
+// Full ids pin the exact version passed to `claude --model`; "" leaves the choice to the CLI.
+const MODELS: [string, string][] = [
+  ["", "Default"],
+  ["claude-fable-5-1", "Fable 5.1"],
+  ["claude-opus-5-5", "Opus 5.5"],
+  ["claude-sonnet-5-5", "Sonnet 5.5"],
+  ["claude-haiku-5-5", "Haiku 5.5"],
+];
+
 const SUGGESTIONS = [
   "Fix the compile errors in this project",
   "Add an introduction section with a short motivation",
@@ -149,6 +158,8 @@ export function ChatPanel() {
   const toggle = useApp((s) => s.toggle);
   const info = useApp((s) => s.info);
   const setUi = useApp((s) => s.setUi);
+  const model = useApp((s) => s.settings?.chatModel ?? "");
+  const saveSettings = useApp((s) => s.saveSettings);
   const project = useProject((s) => s.project);
   const key = project ? `project-${project.name}` : "global";
   const chat = useChats((s) => s.chats[key]) ?? { messages: [], sessionId: null };
@@ -277,6 +288,19 @@ export function ChatPanel() {
           />
           <div className="row">
             <span className="ctx">{project ? `Context: ${project.name}` : "Context: all projects"}</span>
+            <select
+              className="model-select"
+              title="Model"
+              value={model}
+              onChange={(e) => void saveSettings({ chatModel: e.target.value })}
+              disabled={running}
+            >
+              {(MODELS.some(([id]) => id === model) ? MODELS : [...MODELS, [model, model]]).map(([id, label]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
             {running ? (
               <button className="send-btn" title="Stop" onClick={() => api.chatCancel(key)}>
                 <Square size={11} fill="currentColor" />
