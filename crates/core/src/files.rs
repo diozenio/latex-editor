@@ -76,6 +76,10 @@ pub fn write_text(ws: &Workspace, project: &str, rel: &str, content: &str) -> Re
 pub fn write_bytes(ws: &Workspace, project: &str, rel: &str, content: &[u8]) -> Result<()> {
     let p = ws.resolve(project, rel)?;
     check_leaf(&p)?;
+    // A write aimed at a renamed or deleted project must not bring its folder back.
+    if !ws.project_dir(project)?.is_dir() {
+        return Err(Error::NotFound(format!("project {project}")));
+    }
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -180,5 +184,7 @@ mod tests {
         assert_eq!(t[0].name, "sections");
         assert!(t.iter().all(|n| n.name != ".folio"));
         assert!(write_text(&ws, "p", "../q/x.tex", "").is_err());
+        assert!(write_text(&ws, "gone", "main.tex", "").is_err());
+        assert!(!tmp.path().join("gone").exists());
     }
 }
