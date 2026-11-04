@@ -519,7 +519,7 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
       <div className="setting-row">
         <div className="text">
           <strong>Compile automatically</strong>
-          <span>Recompile after each save</span>
+          <span>Recompile on ⌘S and when files change outside the editor</span>
         </div>
         <button className={`switch${meta.autoCompile ? " on" : ""}`} onClick={() => setMeta({ ...meta, autoCompile: !meta.autoCompile })} />
       </div>
