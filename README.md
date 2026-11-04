@@ -32,7 +32,8 @@ cargo test -p quilltex-core -p quilltex-mcp
 npm run app:build    # .app/.dmg on macOS, NSIS .exe on Windows, .deb/.AppImage on Linux
 ```
 
-CI (`.github/workflows/release.yml`) builds all platforms on tag push.
+CI (`.github/workflows/release.yml`) builds all platforms when a release is created. Versions, changelog and tags are
+automated from Conventional Commits; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## GitHub setup
 
