@@ -1147,9 +1147,13 @@ body.tree-dragging * {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
-  z-index: 100;
-  animation: pop 120ms var(--ease);
+  z-index: 300;
+  animation: pop 180ms var(--ease-spring);
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-context-menu-content-transform-origin, top));
   font-size: var(--text-base);
+}
+.menu[data-state="closed"] {
+  animation: pop-out 100ms var(--ease) forwards;
 }
 .platform-macos .menu {
   background: color-mix(in srgb, var(--bg-elevated) 82%, transparent);
@@ -1157,6 +1161,7 @@ body.tree-dragging * {
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
 }
 .menu-item {
+  transition: background 90ms, color 90ms;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1192,6 +1197,32 @@ body.tree-dragging * {
   color: var(--text-tertiary);
   font-size: var(--text-sm);
 }
+.menu-item .menu-action {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.menu-item[data-highlighted] .menu-action {
+  display: inline-flex;
+}
+.menu-item .menu-action:hover {
+  background: var(--red);
+}
+.menu-item .menu-action:hover svg {
+  color: #fff;
+}
+.menu-item .right + .menu-action {
+  margin-left: 4px;
+}
 .menu-sep {
   height: 1px;
   background: var(--border);
@@ -1207,7 +1238,13 @@ body.tree-dragging * {
 @keyframes pop {
   from {
     opacity: 0;
-    transform: scale(0.97) translateY(-2px);
+    transform: scale(0.94) translateY(-4px);
+  }
+}
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
   }
 }
 
@@ -1218,7 +1255,10 @@ body.tree-dragging * {
   inset: 0;
   background: var(--overlay);
   z-index: 200;
-  animation: fade 140ms var(--ease);
+  animation: fade 200ms var(--ease-out);
+}
+.dialog-overlay[data-state="closed"] {
+  animation: fade-out 140ms var(--ease) forwards;
 }
 .dialog {
   position: fixed;
@@ -1234,14 +1274,36 @@ body.tree-dragging * {
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
   z-index: 201;
-  animation: dialog-in 180ms var(--ease);
+  animation: dialog-in 280ms var(--ease-spring);
   outline: none;
+}
+.dialog[data-state="closed"] {
+  animation: dialog-out 140ms var(--ease) forwards;
 }
 .dialog.wide {
   width: min(720px, calc(100vw - 32px));
 }
+/* Fixed height, so content loading in never moves or resizes the dialog. */
+.dialog.tall {
+  height: min(640px, calc(100vh - 80px));
+}
+.dialog.tall .dialog-body {
+  flex: 1;
+  min-height: 0;
+  gap: var(--s-3);
+}
 .dialog-head {
+  position: relative;
   padding: var(--s-5) var(--s-5) var(--s-2);
+}
+.dialog-corner {
+  position: absolute;
+  top: var(--s-4);
+  right: var(--s-4);
+}
+.dialog-corner ~ h2,
+.dialog-corner ~ p {
+  padding-right: 36px;
 }
 .dialog-head h2 {
   margin: 0;
@@ -1271,10 +1333,32 @@ body.tree-dragging * {
     opacity: 0;
   }
 }
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -48%) scale(0.98);
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.96);
+  }
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 6px)) scale(0.98);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
   }
 }
 
@@ -1437,8 +1521,76 @@ body.tree-dragging * {
   padding: 6px 8px;
   border-radius: var(--r-sm);
 }
+.commit-row {
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+  animation: rise 320ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
 .commit-row:hover {
   background: var(--bg-hover);
+}
+.commit-row:active {
+  background: var(--bg-active);
+}
+.commit-row .top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+}
+.commit-row .top .summary {
+  flex: 1;
+  min-width: 0;
+}
+/* Always laid out; only its visibility changes, so hover never shifts rows. */
+.commit-row .acts {
+  display: flex;
+  flex: none;
+  opacity: 0;
+  transform: translateX(4px);
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease), transform 220ms var(--ease-out);
+}
+.commit-row:hover .acts,
+.commit-row .acts:focus-within,
+.commit-row .acts:has([data-state="open"]) {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.commit-files {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: var(--s-3);
+  max-height: 160px;
+  overflow: auto;
+}
+.commit-files {
+  flex: none;
+  margin-bottom: 0;
+}
+.commit-files .git-file {
+  flex: none;
+  cursor: pointer;
+  transition: background var(--dur), color var(--dur);
+  animation: rise 260ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+.commit-files .git-file.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.commit-diff {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.commit-diff .diff {
+  flex: 1;
+  max-height: none;
+  animation: fade-in 220ms var(--ease-out);
 }
 .commit-row .summary {
   overflow: hidden;
@@ -1487,7 +1639,8 @@ body.tree-dragging * {
 }
 .diff div {
   padding: 0 var(--s-3);
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .diff .add {
   background: var(--green-soft);
@@ -1880,4 +2033,19 @@ body.tree-dragging * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog-overlay,
+  .menu,
+  .commit-row,
+  .commit-files .git-file,
+  .commit-diff .diff {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+  .commit-row .acts {
+    transition: none;
+  }
 }
