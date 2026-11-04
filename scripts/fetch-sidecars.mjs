@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-// Prepares the sidecar binaries and engine files Tauri bundles with the app:
-//   src-tauri/binaries/tectonic-<triple>[.exe]   (downloaded)
-//   src-tauri/binaries/quilltex-mcp-<triple>[.exe]  (built from crates/mcp)
-//   src-tauri/resources/tectonic-cache/  Tectonic cache with what the templates need
-//   src-tauri/resources/texlive/TinyTeX-v<version>.{tar.xz,zip}  TeX Live, set up
-//     with the templates' packages
-// The engine files are built by compiling every template (crates/core/examples/
-// prepare-engines.rs) and redone only when Tectonic, TinyTeX or the templates change.
-// Usage: node scripts/fetch-sidecars.mjs [--target <triple>] [--skip-mcp] [--skip-engines]
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -30,7 +21,6 @@ const TECTONIC_VERSION = "0.17.0";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const binDir = join(root, "src-tauri", "binaries");
 const resourcesDir = join(root, "src-tauri", "resources");
-// One source of truth for the TinyTeX release: the Rust side downloads the same one.
 const TINYTEX_VERSION = readFileSync(
   join(root, "crates", "core", "src", "texlive.rs"),
   "utf8",
@@ -48,13 +38,12 @@ function hostTriple() {
   return out.match(/^host: (.+)$/m)[1].trim();
 }
 
-// Tectonic does not publish every triple; map to the closest asset.
 function tectonicAsset(t) {
   const map = {
     "aarch64-apple-darwin": "aarch64-apple-darwin.tar.gz",
     "x86_64-apple-darwin": "x86_64-apple-darwin.tar.gz",
     "x86_64-pc-windows-msvc": "x86_64-pc-windows-msvc.zip",
-    "aarch64-pc-windows-msvc": "x86_64-pc-windows-msvc.zip", // runs under emulation
+    "aarch64-pc-windows-msvc": "x86_64-pc-windows-msvc.zip",
     "x86_64-unknown-linux-gnu": "x86_64-unknown-linux-musl.tar.gz",
     "aarch64-unknown-linux-gnu": "aarch64-unknown-linux-musl.tar.gz",
   };
@@ -74,8 +63,6 @@ function findFile(dir, name) {
   return null;
 }
 
-// curl rather than fetch: CI runners drop large release downloads now and then
-// ("other side closed"), and curl retries them.
 function download(url, dest) {
   console.log(`↓ ${url}`);
   execFileSync(
@@ -95,7 +82,6 @@ function download(url, dest) {
   );
 }
 
-// Same names as `asset()` in crates/core/src/texlive.rs.
 function tinytexAsset(t) {
   const platform = t.includes("apple-darwin")
     ? "darwin"
@@ -161,7 +147,6 @@ async function prepareEngines() {
     recursive: true,
     force: true,
   });
-  // tar on Windows writes .zip but not .tar.xz; the app unpacks either with tar.
   const packed = join(
     texliveDir,
     `TinyTeX-v${TINYTEX_VERSION}.${isWin ? "zip" : "tar.xz"}`,
@@ -192,7 +177,6 @@ async function fetchTectonic() {
   mkdirSync(work, { recursive: true });
   const archive = join(work, asset);
   download(url, archive);
-  // bsdtar (macOS, Windows 10+, most Linux) handles both .tar.gz and .zip.
   execFileSync("tar", ["-xf", archive, "-C", work]);
   const bin = findFile(work, `tectonic${ext}`);
   if (!bin) throw new Error("tectonic binary not found in archive");
