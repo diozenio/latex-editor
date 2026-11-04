@@ -25,17 +25,14 @@ impl Default for GithubUser {
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub projects_root: String,
-    /// Cached from `gh api user`; gh owns the actual sign-in.
     pub github_user: Option<GithubUser>,
     pub git_name: String,
     pub git_email: String,
     pub sync_interval_secs: u64,
     pub mcp_registered: bool,
-    /// Optional override for the `claude` executable.
     pub claude_path: String,
     pub editor_font_size: u32,
     pub theme: String,
-    /// Model alias or id passed to `claude --model`; empty uses the CLI default.
     pub chat_model: String,
 }
 
@@ -61,9 +58,7 @@ pub struct AppState {
     pub settings: Mutex<Settings>,
     pub config_dir: PathBuf,
     pub toolchain: RwLock<Toolchain>,
-    /// Directory holding the bundled sidecars (next to the main executable).
     pub bin_dir: PathBuf,
-    /// Tectonic cache shipped with the app, copied into the real one at startup.
     pub tectonic_seed: Option<PathBuf>,
 }
 
@@ -114,7 +109,6 @@ impl AppState {
         self.bin_dir.join(exe("quilltex-mcp"))
     }
 
-    /// Arguments for launching quilltex-mcp against the current workspace.
     pub fn mcp_args(&self) -> Vec<String> {
         let tc = self.toolchain.read().unwrap();
         let mut args = vec!["--root".into(), self.ws().root().display().to_string()];
@@ -134,8 +128,6 @@ impl AppState {
     }
 }
 
-/// Where the private TeX Live goes. TeX Live breaks on Windows paths with spaces
-/// or non-ASCII characters (common in user names), so those fall back to ProgramData.
 fn texlive_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
     let dir = app.path().app_local_data_dir()?.join("texlive");
     #[cfg(windows)]
@@ -147,7 +139,6 @@ fn texlive_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
-/// The TinyTeX archive `scripts/fetch-sidecars.mjs` puts in the app's resources.
 fn bundled_texlive(resources: &std::path::Path) -> Option<PathBuf> {
     std::fs::read_dir(resources.join("texlive"))
         .ok()?

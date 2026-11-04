@@ -1,6 +1,3 @@
-//! Watches the projects folder so edits made outside the app (Finder, git,
-//! Claude via MCP) show up live. Emits `fs-changed` { project, paths }.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{mpsc, Mutex};
 use std::time::Duration;
@@ -23,7 +20,7 @@ struct FsChanged {
 pub fn restart(app: &AppHandle) {
     let holder = app.state::<WatcherHolder>();
     let mut slot = holder.0.lock().unwrap();
-    *slot = None; // drop the old watcher first
+    *slot = None;
     let root = app.state::<AppState>().ws().root().to_path_buf();
 
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
@@ -35,7 +32,6 @@ pub fn restart(app: &AppHandle) {
 
     let app = app.clone();
     std::thread::spawn(move || {
-        // Batch bursts (saves, checkouts) into one event per project.
         while let Ok(first) = rx.recv() {
             let mut batch = vec![first];
             while let Ok(ev) = rx.recv_timeout(Duration::from_millis(150)) {
@@ -52,7 +48,6 @@ pub fn restart(app: &AppHandle) {
                     let internal = rel_path.starts_with(".git/")
                         || rel_path.starts_with(".quilltex/build")
                         || rel_path.ends_with(".quilltex-tmp");
-                    // Git ref changes matter for the sync badge; mark them specially.
                     if rel_path.starts_with(".git/") {
                         if rel_path == ".git/HEAD" || rel_path.starts_with(".git/refs") || rel_path == ".git/index" {
                             by_project.entry(project).or_default().insert(".git".into());

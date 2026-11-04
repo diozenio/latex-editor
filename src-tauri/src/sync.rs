@@ -1,6 +1,3 @@
-//! Periodically fetches every project with an `origin` remote and emits
-//! `sync-status` so badges stay current.
-
 use std::time::Duration;
 
 use serde::Serialize;

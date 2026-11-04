@@ -1,6 +1,3 @@
-//! IPC surface. Thin wrappers over quilltex-core; anything slow runs on the
-//! blocking pool so the UI never stalls.
-
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -25,8 +22,6 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> CmdResult<T> + Send + '
     tauri::async_runtime::spawn_blocking(f).await.map_err(err)?
 }
 
-// ---------- app ----------
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfo {
@@ -34,9 +29,7 @@ pub struct AppInfo {
     platform: String,
     projects_root: String,
     tectonic: bool,
-    /// The private TeX Live is set up and ready.
     texlive: bool,
-    /// TeX Live ships inside the app, so setting it up needs no download.
     texlive_bundled: bool,
     claude: Option<String>,
     gh_installed: bool,
@@ -75,13 +68,10 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings)
     }
     state.save_settings(settings.clone()).map_err(err)?;
     if old.projects_root != settings.projects_root && settings.mcp_registered {
-        // Keep the Claude Code registration pointing at the new folder.
         let _ = crate::chat::register_mcp(&state);
     }
     Ok(settings)
 }
-
-// ---------- projects ----------
 
 #[tauri::command]
 pub fn list_projects(state: State<AppState>) -> CmdResult<Vec<project::ProjectSummary>> {
@@ -159,8 +149,6 @@ pub async fn export_zip(state: State<'_, AppState>, name: String, dest: String, 
     blocking(move || archive::export_zip(&ws, &name, Path::new(&dest), include_git).map_err(err)).await
 }
 
-// ---------- files ----------
-
 #[tauri::command]
 pub fn file_tree(state: State<AppState>, project: String) -> CmdResult<Vec<files::FileNode>> {
     files::tree(&state.ws(), &project).map_err(err)
@@ -171,7 +159,6 @@ pub fn read_text(state: State<AppState>, project: String, path: String) -> CmdRe
     files::read_text(&state.ws(), &project, &path).map_err(err)
 }
 
-/// Raw bytes (PDFs, images) without JSON-encoding overhead.
 #[tauri::command]
 pub fn read_binary(state: State<AppState>, project: String, path: String) -> CmdResult<Response> {
     Ok(Response::new(files::read_bytes(&state.ws(), &project, &path).map_err(err)?))
@@ -206,14 +193,11 @@ pub fn import_files(state: State<AppState>, project: String, paths: Vec<String>,
         .collect()
 }
 
-// ---------- compile ----------
-
 #[tauri::command]
 pub async fn compile_project(app: AppHandle, state: State<'_, AppState>, project: String) -> CmdResult<compile::CompileResult> {
     let ws = state.ws();
     let tc = state.toolchain.read().unwrap().clone();
     blocking(move || {
-        // Slow steps (setting up TeX Live, installing packages) show in the status bar.
         let status = |message: &str| {
             let _ = app.emit("compile-status", serde_json::json!({ "project": project, "message": message }));
         };
@@ -222,7 +206,6 @@ pub async fn compile_project(app: AppHandle, state: State<'_, AppState>, project
     .await
 }
 
-/// Set up TeX Live ahead of the first compile that needs it.
 #[tauri::command]
 pub async fn install_texlive(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
     let tc = state.toolchain.read().unwrap().clone();
@@ -272,10 +255,6 @@ pub fn synctex_inverse(state: State<AppState>, project: String, page: u32, x: f6
     Ok(synctex_for(&state, &project)?.inverse(page, x, y))
 }
 
-// ---------- git ----------
-
-/// Commit identity to write into the repo: the Settings override, else
-/// nothing when git already has one (e.g. ~/.gitconfig), else the GitHub user.
 fn identity(state: &AppState, project: &str) -> (String, String) {
     let s = state.settings();
     let (cfg_name, cfg_email) = git::configured_identity(&state.ws(), project);
@@ -501,8 +480,6 @@ pub async fn git_clone(app: AppHandle, state: State<'_, AppState>, url: String, 
 pub fn sync_now(app: AppHandle, state: State<AppState>, project: String) {
     crate::sync::check_one(app, state.ws(), project);
 }
-
-// ---------- uninstall ----------
 
 #[tauri::command]
 pub fn uninstall(app: AppHandle, state: State<AppState>, delete_projects: bool) -> CmdResult<String> {

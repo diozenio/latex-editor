@@ -1,6 +1,3 @@
-//! GitHub through the user's own GitHub CLI (`gh`). QuillTex stores no token:
-//! signing in runs `gh auth login --web`, which keeps it in gh's store.
-
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Stdio};
 use std::sync::Mutex;
@@ -26,7 +23,6 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> CmdResult<T> + Send + '
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GithubStatus {
-    /// `gh` was found on this machine.
     installed: bool,
     user: Option<GithubUser>,
 }
@@ -35,7 +31,6 @@ fn fetch_user() -> CmdResult<GithubUser> {
     let me = gh::api(&["user"]).map_err(err)?;
     let mut email = me["email"].as_str().unwrap_or_default().to_string();
     if email.is_empty() {
-        // Needs the user:email scope; fine to skip without it.
         if let Ok(emails) = gh::api(&["user/emails"]) {
             email = emails
                 .as_array()
@@ -59,8 +54,6 @@ fn cache_user(state: &AppState, user: Option<GithubUser>) -> CmdResult<()> {
     state.save_settings(s).map_err(err)
 }
 
-/// Whether gh is installed and who it is signed in as. Refreshes the cached
-/// user in settings.
 #[tauri::command]
 pub async fn github_status(state: State<'_, AppState>) -> CmdResult<GithubStatus> {
     let (installed, user) = blocking(|| {
@@ -82,8 +75,6 @@ pub struct LoginCode {
     verification_uri: String,
 }
 
-/// Runs `gh auth login --web`. Emits `github-login-code` once gh prints the
-/// one-time code, then waits until the user approves it in the browser.
 #[tauri::command]
 pub async fn github_login(app: AppHandle, state: State<'_, AppState>) -> CmdResult<GithubUser> {
     let mut child = gh::command()
@@ -98,7 +89,6 @@ pub async fn github_login(app: AppHandle, state: State<'_, AppState>) -> CmdResu
         let _ = old.kill();
     }
 
-    // gh prints the code and URL on stderr (stdout in some versions).
     let output = std::sync::Arc::new(Mutex::new(String::new()));
     let readers: Vec<Box<dyn std::io::Read + Send>> = [stdout.map(|s| Box::new(s) as _), stderr.map(|s| Box::new(s) as _)]
         .into_iter()
@@ -138,7 +128,6 @@ pub async fn github_login(app: AppHandle, state: State<'_, AppState>) -> CmdResu
     Ok(user)
 }
 
-/// gh's one-time device codes look like `ABCD-1234`.
 fn is_code(w: &str) -> bool {
     let b = w.as_bytes();
     b.len() == 9 && b[4] == b'-' && b.iter().enumerate().all(|(i, c)| i == 4 || c.is_ascii_uppercase() || c.is_ascii_digit())
@@ -151,7 +140,6 @@ pub fn github_login_cancel() {
     }
 }
 
-/// Signs gh itself out of github.com (this affects the terminal too).
 #[tauri::command]
 pub async fn github_logout(state: State<'_, AppState>) -> CmdResult<()> {
     blocking(|| gh::run(&["auth", "logout", "--hostname", gh::HOST]).map_err(err)).await?;
@@ -191,7 +179,6 @@ pub async fn github_repos() -> CmdResult<Vec<Repo>> {
         .unwrap_or_default())
 }
 
-/// Create a GitHub repo for the project, set it as origin and push.
 #[tauri::command]
 pub async fn github_publish(
     app: tauri::AppHandle,

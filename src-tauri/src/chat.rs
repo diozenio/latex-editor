@@ -1,8 +1,3 @@
-//! The side chat drives the user's installed Claude Code CLI in headless
-//! mode. It only gets QuillTex's MCP tools: built-in file/shell tools are
-//! disabled and it runs from a neutral folder, so it can touch projects but
-//! nothing else (including this app's own source).
-
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
@@ -96,7 +91,6 @@ pub fn chat_send(
         cmd.creation_flags(0x0800_0000);
     }
     let mut child = cmd.spawn().map_err(|e| format!("failed to start claude: {e}"))?;
-    // The prompt goes through stdin so it can never be mistaken for a flag.
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(message.as_bytes()).map_err(|e| e.to_string())?;
     }
@@ -164,8 +158,6 @@ pub fn chat_save(state: State<AppState>, key: String, data: Value) -> CmdResult<
     std::fs::create_dir_all(p.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(p, data.to_string()).map_err(|e| e.to_string())
 }
-
-// ---------- Claude Code registration (for use from the terminal) ----------
 
 fn run_claude(state: &AppState, args: &[String]) -> CmdResult<String> {
     let out = Command::new(claude_bin(state)?).args(args).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;

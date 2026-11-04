@@ -1,7 +1,3 @@
-//! GUI apps on macOS/Linux don't inherit the login shell's PATH, so tools
-//! like `claude` (often in ~/.local/bin or an nvm dir) wouldn't be found.
-//! Ask the login shell once and extend our PATH (process-local only).
-
 use std::path::PathBuf;
 
 pub fn fix_path() {
@@ -23,7 +19,6 @@ pub fn fix_path() {
     }
 }
 
-/// Locate the Claude Code CLI.
 pub fn find_claude(override_path: &str) -> Option<PathBuf> {
     if !override_path.is_empty() {
         return Some(PathBuf::from(override_path)).filter(|p| p.is_file());

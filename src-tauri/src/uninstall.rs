@@ -1,8 +1,3 @@
-//! In-app uninstall (macOS/Linux; Windows uses the NSIS uninstaller, which
-//! we launch). Removes everything QuillTex created outside the projects
-//! folder, and the projects too if asked. GitHub sign-in belongs to the
-//! user's GitHub CLI and is left alone.
-
 use tauri::{AppHandle, Manager};
 
 use crate::state::AppState;
@@ -14,7 +9,6 @@ pub fn run(app: &AppHandle, state: &AppState, delete_projects: bool) -> anyhow::
 
     #[cfg(windows)]
     {
-        // Hand over to the NSIS uninstaller (it has its own checkboxes).
         let uninstaller = state.bin_dir.join("uninstall.exe");
         if uninstaller.is_file() {
             std::process::Command::new(uninstaller).spawn()?;
@@ -36,7 +30,6 @@ pub fn run(app: &AppHandle, state: &AppState, delete_projects: bool) -> anyhow::
     {
         let _ = std::fs::remove_dir_all(dir);
     }
-    // WebView storage on macOS lives under ~/Library/WebKit/<identifier>.
     #[cfg(target_os = "macos")]
     if let Some(home) = dirs::home_dir() {
         let id = &app.config().identifier;
@@ -48,7 +41,6 @@ pub fn run(app: &AppHandle, state: &AppState, delete_projects: bool) -> anyhow::
 
     #[cfg(target_os = "macos")]
     {
-        // .../QuillTex.app/Contents/MacOS/quilltex → move QuillTex.app to the Trash.
         let exe = std::env::current_exe()?;
         if let Some(bundle) = exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app")) {
             quilltex_core::trash::delete(bundle).map_err(|e| anyhow::anyhow!(e.to_string()))?;

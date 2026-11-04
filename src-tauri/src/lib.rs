@@ -66,10 +66,6 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window])
 }
 
-/// Gets both engines ready in the background, so the first compile does not
-/// wait on them: the bundled Tectonic cache is copied in and the bundled TeX
-/// Live unpacked (unless the user removed it). A compile that starts meanwhile
-/// waits for TeX Live's setup instead of repeating it.
 fn prepare_engines(app: &tauri::AppHandle) {
     let state = app.state::<state::AppState>();
     let tc = state.toolchain.read().unwrap().clone();
@@ -103,8 +99,6 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(state::AppState::init(&handle)?);
-            // A menu bar inside the window looks foreign on Windows/Linux; the
-            // frontend handles shortcuts there instead.
             #[cfg(target_os = "macos")]
             app.set_menu(build_menu(&handle)?)?;
             app.on_menu_event(|app, event| {
@@ -123,8 +117,6 @@ pub fn run() {
                     let _ = window_vibrancy::apply_acrylic(&window, Some((18, 18, 18, 125)));
                 }
             }
-            // Fill the monitor's work area (below the menu bar, clear of the Dock)
-            // explicitly: `maximized` in the config leaves the window offset.
             if let Ok(Some(monitor)) = window.current_monitor() {
                 let area = monitor.work_area();
                 let _ = window.set_position(tauri::PhysicalPosition::new(area.position.x, area.position.y));

@@ -1,9 +1,3 @@
-//! Claude Code plan usage. The CLI reports each rate-limit window as a
-//! utilization fraction (in its `rate_limit_event`) but never a token limit,
-//! so the limit shown is estimated: tokens spent in the window / utilization.
-//! Spent tokens come from Claude Code's own transcripts; the ones written by
-//! QuillTex's chat (run from `chat-workspace`) are QuillTex's share.
-
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -31,16 +25,13 @@ pub struct Limit {
 #[serde(rename_all = "camelCase")]
 pub struct WindowUsage {
     kind: String,
-    /// 0..1 of the plan limit, as reported by Claude Code.
     utilization: f64,
     resets_at: i64,
     total_tokens: u64,
     quilltex_tokens: u64,
-    /// Not reported by Claude Code; derived from `total_tokens / utilization`.
     estimated_limit: Option<u64>,
 }
 
-/// Pulls the per-window limits out of a stream-json `rate_limit_event`.
 pub fn limits_from_event(event: &Value) -> Option<Vec<Limit>> {
     if event["type"] != "rate_limit_event" {
         return None;
@@ -64,13 +55,10 @@ pub fn remember(state: &AppState, event: &Value) {
 
 fn cached(state: &AppState) -> Option<Vec<Limit>> {
     let limits: Vec<Limit> = serde_json::from_str(&std::fs::read_to_string(state.config_dir.join(CACHE_FILE)).ok()?).ok()?;
-    // A window that already reset says nothing about the current one.
     let now = chrono::Utc::now().timestamp();
     Some(limits.into_iter().filter(|l| l.resets_at > now).collect::<Vec<_>>()).filter(|l| !l.is_empty())
 }
 
-/// One tiny request, from a neutral folder and without a saved session, so
-/// it neither counts as QuillTex's usage nor clutters the user's history.
 fn probe(state: &AppState) -> CmdResult<Vec<Limit>> {
     let bin = crate::chat::claude_bin(state)?;
     let out = Command::new(bin)
@@ -82,7 +70,6 @@ fn probe(state: &AppState) -> CmdResult<Vec<Limit>> {
         .stderr(Stdio::null())
         .spawn()
         .and_then(|mut child| {
-            // Via stdin, so the variadic --tools flag can't swallow it.
             child.stdin.take().map(|mut i| i.write_all(b"hi"));
             child.wait_with_output()
         })
@@ -94,8 +81,6 @@ fn probe(state: &AppState) -> CmdResult<Vec<Limit>> {
         .ok_or_else(|| "Claude Code didn't report its usage limits. Make sure you're signed in with a Claude subscription.".into())
 }
 
-/// Claude Code names a project's transcript folder after its cwd, with every
-/// non-alphanumeric character turned into `-`.
 fn transcript_dir_name(cwd: &Path) -> String {
     cwd.display().to_string().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
 }
@@ -112,14 +97,10 @@ fn jsonl_files(dir: &Path, since: std::time::SystemTime, out: &mut Vec<PathBuf>)
     }
 }
 
-/// Tokens that count towards the limit; cache reads are excluded as they are
-/// cheap and would dwarf everything else.
 fn billed(usage: &Value) -> u64 {
     ["input_tokens", "output_tokens", "cache_creation_input_tokens"].iter().filter_map(|k| usage[*k].as_u64()).sum()
 }
 
-/// (total, quilltex) tokens spent at or after `since`, de-duplicating the
-/// repeated lines Claude Code writes for one streamed message.
 fn spent(home: &Path, quilltex_dir: &str, since: i64) -> (u64, u64) {
     let cutoff = std::time::UNIX_EPOCH + std::time::Duration::from_secs(since.max(0) as u64);
     let mut files = Vec::new();
@@ -164,8 +145,6 @@ fn compute(state: &AppState, limits: Vec<Limit>) -> CmdResult<Vec<WindowUsage>> 
         .collect())
 }
 
-/// `refresh` forces a new probe; otherwise the last limits seen (by the chat
-/// or a previous probe) are used, and a probe only runs if there are none.
 #[tauri::command]
 pub async fn claude_usage(app: AppHandle, refresh: bool) -> CmdResult<Vec<WindowUsage>> {
     tauri::async_runtime::spawn_blocking(move || {
