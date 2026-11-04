@@ -132,7 +132,7 @@ function extensions(path: string, onChange: (text: string) => void, onLine: (l: 
         ]
       : [autocompletion()]),
     keymap.of([
-      { key: "Mod-s", preventDefault: true, run: () => (void p().save(path), true) },
+      { key: "Mod-s", preventDefault: true, run: () => (void p().commit(), true) },
       { key: "Mod-Enter", preventDefault: true, run: () => (void p().compile(), true) },
       ...closeBracketsKeymap,
       ...defaultKeymap,
@@ -159,26 +159,44 @@ function extensions(path: string, onChange: (text: string) => void, onLine: (l: 
   ];
 }
 
+/** Replace only the span that differs, so the cursor and scroll stay put. */
+function replaceDoc(view: EditorView, next: string) {
+  const prev = view.state.doc.toString();
+  let start = 0;
+  const max = Math.min(prev.length, next.length);
+  while (start < max && prev.charCodeAt(start) === next.charCodeAt(start)) start++;
+  let end = 0;
+  while (end < max - start && prev.charCodeAt(prev.length - 1 - end) === next.charCodeAt(next.length - 1 - end)) end++;
+  view.dispatch({ changes: { from: start, to: prev.length - end, insert: next.slice(start, next.length - end) } });
+}
+
 /** One EditorView; each open file keeps its own EditorState (and undo history). */
 export function Editor({ path }: { path: string }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const states = useRef(new Map<string, { state: EditorState; version: number }>());
+  const shown = useRef<string | null>(null);
   const doc = useProject((s) => s.docs[path]);
   const jump = useProject((s) => s.jump);
   const project = useProject((s) => s.project);
   const tree = useProject((s) => s.tree);
   const editorFontSize = useApp((s) => s.settings?.editorFontSize ?? 13);
 
-  // Mount once.
+  // Mount once. A fresh view starts empty, so forget what was shown; the swap
+  // effect below then puts the right state back (StrictMode remounts this).
   useEffect(() => {
     const v = new EditorView({ parent: host.current! });
     view.current = v;
-    return () => v.destroy();
+    return () => {
+      const entry = shown.current && states.current.get(shown.current);
+      if (entry) entry.state = v.state;
+      shown.current = null;
+      view.current = null;
+      v.destroy();
+    };
   }, []);
 
   // Swap documents, keeping the outgoing one's state (undo history, cursor).
-  const shown = useRef<string | null>(null);
   useEffect(() => {
     const v = view.current;
     if (!v || !doc) return;
@@ -206,6 +224,8 @@ export function Editor({ path }: { path: string }) {
       shown.current = path;
       v.focus();
     }
+    // The store is the source of truth; never show a buffer that disagrees with it.
+    if (v.state.doc.toString() !== doc.content) replaceDoc(v, doc.content);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, !!doc]);
 
@@ -213,11 +233,9 @@ export function Editor({ path }: { path: string }) {
   useEffect(() => {
     const v = view.current;
     const entry = states.current.get(path);
-    if (!v || !doc || !entry || doc.version === entry.version) return;
+    if (!v || !doc || !entry || shown.current !== path || doc.version === entry.version) return;
     entry.version = doc.version;
-    if (v.state.doc.toString() !== doc.content) {
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: doc.content } });
-    }
+    if (v.state.doc.toString() !== doc.content) replaceDoc(v, doc.content);
   }, [doc?.version, path, doc]);
 
   // Forget states of closed tabs.
