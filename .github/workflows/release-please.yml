@@ -12,10 +12,26 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.pr.outputs.release_created || steps.release.outputs.release_created }}
+      tag_name: ${{ steps.pr.outputs.tag_name || steps.release.outputs.tag_name }}
     steps:
+      # Opens or updates the release pull request (version bump + changelog)…
+      - id: pr
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      # …which is merged right away, so every releasable push to main ships
+      # without anyone approving it. A merge made with GITHUB_TOKEN does not
+      # start this workflow again, so release-please runs once more here to
+      # tag and publish the release.
+      - name: Merge the release pull request
+        if: ${{ steps.pr.outputs.pr }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge "${{ fromJSON(steps.pr.outputs.pr).number }}" --squash --repo "${{ github.repository }}"
       - id: release
+        if: ${{ steps.pr.outputs.pr }}
         uses: googleapis/release-please-action@v4
         with:
           config-file: release-please-config.json
