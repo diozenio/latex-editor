@@ -35,6 +35,8 @@ pub struct Settings {
     pub claude_path: String,
     pub editor_font_size: u32,
     pub theme: String,
+    /// Model alias or id passed to `claude --model`; empty uses the CLI default.
+    pub chat_model: String,
 }
 
 impl Default for Settings {
@@ -49,6 +51,7 @@ impl Default for Settings {
             claude_path: String::new(),
             editor_font_size: 13,
             theme: "system".into(),
+            chat_model: String::new(),
         }
     }
 }

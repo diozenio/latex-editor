@@ -95,6 +95,7 @@ export interface Settings {
   claudePath: string;
   editorFontSize: number;
   theme: "system" | "light" | "dark";
+  chatModel: string;
 }
 
 export interface AppInfo {
