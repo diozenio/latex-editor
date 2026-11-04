@@ -18,6 +18,7 @@ import { mod } from "@/lib/format";
 import { Dropdown } from "./ui/Menu";
 import { FileTree, treeActions } from "./FileTree";
 import { GitPanel } from "./GitPanel";
+import { UpdateButton } from "./UpdateButton";
 
 export function Sidebar() {
   const { ui, setUi, toggle, projects, current, openProject, openDialog } = useApp();
@@ -64,10 +65,10 @@ export function Sidebar() {
                   flex: "none",
                 }}
               >
-                {project ? project.name[0]?.toUpperCase() : "F"}
+                {project ? project.name[0]?.toUpperCase() : "Q"}
               </span>
               <span className="label" style={{ fontSize: 14, color: "var(--text)" }}>
-                {project?.name ?? "Folio"}
+                {project?.name ?? "QuillTex"}
               </span>
               <ChevronDown size={14} />
             </button>
@@ -140,6 +141,8 @@ export function Sidebar() {
             <HomeIcon size={16} />
           </button>
         )}
+        <span className="grow" />
+        <UpdateButton />
       </div>
     </aside>
   );

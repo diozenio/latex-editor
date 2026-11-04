@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { listen } from "@tauri-apps/api/event";
 import { api, type CompileResult, type FileNode, type PdfSpot, type ProjectSummary, type RepoStatus } from "@/lib/ipc";
 import { useApp } from "./app";
 
@@ -30,6 +31,8 @@ interface ProjectState {
   active: string | null;
   docs: Record<string, Doc>;
   compiling: boolean;
+  /** Slow step of the running compile (setting up TeX Live, installing a package). */
+  compileStatus: string | null;
   result: CompileResult | null;
   pdfVersion: number;
   highlights: { spots: PdfSpot[]; nonce: number };
@@ -86,6 +89,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   active: null,
   docs: {},
   compiling: false,
+  compileStatus: null,
   result: null,
   pdfVersion: 0,
   highlights: { spots: [], nonce: 0 },
@@ -112,7 +116,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       await Promise.all([get().refreshTree(), get().refreshGit()]);
       let restored: string[] = [];
       try {
-        restored = JSON.parse(localStorage.getItem(`folio.tabs.${name}`) || "[]");
+        restored = JSON.parse(localStorage.getItem(`quilltex.tabs.${name}`) || "[]");
       } catch {
         /* ignore */
       }
@@ -285,7 +289,10 @@ export const useProject = create<ProjectState>((set, get) => ({
     clearTimeout(compileTimer);
     await get().saveAll();
     const session = get().session;
-    set({ compiling: true });
+    set({ compiling: true, compileStatus: null });
+    const unlisten = await listen<{ project: string; message: string }>("compile-status", (e) => {
+      if (e.payload.project === p.name && get().session === session) set({ compileStatus: e.payload.message });
+    });
     try {
       const result = await api.compile(p.name);
       if (get().session !== session) return;
@@ -306,7 +313,8 @@ export const useProject = create<ProjectState>((set, get) => ({
         useApp.getState().setUi({ logs: true });
       }
     } finally {
-      set({ compiling: false });
+      unlisten();
+      set({ compiling: false, compileStatus: null });
       if (compileQueued) {
         compileQueued = false;
         get().scheduleCompile();
@@ -322,7 +330,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     const fileChanges = paths.filter((x) => x !== ".git" && x !== "");
     if (fileChanges.length) await get().refreshTree();
     void get().refreshGit();
-    if (fileChanges.some((x) => x === ".folio/project.json")) void get().refreshMeta();
+    if (fileChanges.some((x) => x === ".quilltex/project.json")) void get().refreshMeta();
 
     let texChanged = false;
     for (const path of fileChanges) {
@@ -400,9 +408,9 @@ export const useProject = create<ProjectState>((set, get) => ({
 
 function moveTabs(from: string, to: string) {
   try {
-    const tabs = localStorage.getItem(`folio.tabs.${from}`);
-    if (tabs !== null) localStorage.setItem(`folio.tabs.${to}`, tabs);
-    localStorage.removeItem(`folio.tabs.${from}`);
+    const tabs = localStorage.getItem(`quilltex.tabs.${from}`);
+    if (tabs !== null) localStorage.setItem(`quilltex.tabs.${to}`, tabs);
+    localStorage.removeItem(`quilltex.tabs.${from}`);
   } catch {
     /* ignore */
   }
@@ -410,7 +418,7 @@ function moveTabs(from: string, to: string) {
 
 function persistTabs(project: string, tabs: string[]) {
   try {
-    localStorage.setItem(`folio.tabs.${project}`, JSON.stringify(tabs));
+    localStorage.setItem(`quilltex.tabs.${project}`, JSON.stringify(tabs));
   } catch {
     /* ignore */
   }

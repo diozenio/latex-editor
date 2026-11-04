@@ -518,9 +518,9 @@ function CommitDetails({ project, commit, onClose }: { project: string; commit: 
 
 const ENGINES: [Engine, string][] = [
   ["tectonic", "Tectonic (built-in, XeTeX)"],
-  ["latexmk-pdflatex", "pdfLaTeX (system TeX)"],
-  ["latexmk-xelatex", "XeLaTeX (system TeX)"],
-  ["latexmk-lualatex", "LuaLaTeX (system TeX)"],
+  ["latexmk-pdflatex", "pdfLaTeX (TeX Live)"],
+  ["latexmk-xelatex", "XeLaTeX (TeX Live)"],
+  ["latexmk-lualatex", "LuaLaTeX (TeX Live)"],
 ];
 const COLORS = ["#6366F1", "#3B82F6", "#84CC16", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6", "#EF4444"];
 
@@ -551,7 +551,7 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
       title="Project settings"
       description={
         <>
-          Saved in <span className="mono">.folio/project.json</span> inside the project.
+          Saved in <span className="mono">.quilltex/project.json</span> inside the project.
         </>
       }
       footer={
@@ -577,13 +577,16 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
         <label>Compiler</label>
         <select className="select" value={meta.engine} onChange={(e) => setMeta({ ...meta, engine: e.target.value as Engine })}>
           {ENGINES.map(([id, label]) => (
-            <option key={id} value={id} disabled={id !== "tectonic" && !info?.systemTex}>
+            <option key={id} value={id}>
               {label}
-              {id !== "tectonic" && !info?.systemTex ? " (not installed)" : ""}
+              {id !== "tectonic" && !info?.texlive ? " (downloads on first compile)" : ""}
             </option>
           ))}
         </select>
-        <span className="hint">Tectonic ships with Folio and downloads packages on demand into its own cache.</span>
+        <span className="hint">
+          Both belong to QuillTex and download packages on demand. TeX Live covers newer packages, biber, glossaries and
+          LuaLaTeX.
+        </span>
       </div>
       <div className="field">
         <label>Color</label>
@@ -632,7 +635,7 @@ function Uninstall({ onClose }: { onClose: () => void }) {
     <Dialog
       open
       onClose={onClose}
-      title="Uninstall Folio"
+      title="Uninstall QuillTex"
       description="Removes the app, its settings, the TeX package cache, chat history, the saved GitHub token and the Claude Code registration."
       footer={
         done ? (
@@ -664,7 +667,7 @@ function Uninstall({ onClose }: { onClose: () => void }) {
             <span>
               App and app data
               <div className="muted" style={{ fontSize: 12 }}>
-                Settings, caches and logs. Nothing outside Folio’s own folders is touched.
+                Settings, caches and logs. Nothing outside QuillTex’s own folders is touched.
               </div>
             </span>
           </label>

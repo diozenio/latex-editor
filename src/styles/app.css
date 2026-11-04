@@ -2099,8 +2099,8 @@ body.tree-dragging * {
 .usage-legend .dot.other {
   background: var(--text-quaternary);
 }
-.usage-bar .seg.folio,
-.usage-legend .dot.folio {
+.usage-bar .seg.quilltex,
+.usage-legend .dot.quilltex {
   background: var(--accent);
 }
 .usage-legend {
@@ -2114,4 +2114,23 @@ body.tree-dragging * {
   height: 8px;
   border-radius: 50%;
   margin-right: 4px;
+}
+
+.update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+}
+.update-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
 }

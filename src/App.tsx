@@ -16,6 +16,7 @@ import { Toasts } from "@/components/ui/Toasts";
 import { downloadPdf } from "@/components/PdfViewer";
 import { ChatPanel } from "@/components/ChatPanel";
 import { treeActions } from "@/components/FileTree";
+import { useUpdater } from "@/stores/updater";
 
 function runAction(id: string) {
   const app = useApp.getState();
@@ -59,7 +60,7 @@ function runAction(id: string) {
 }
 
 /**
- * A project folder renamed outside Folio shows up as two root events in one burst:
+ * A project folder renamed outside QuillTex shows up as two root events in one burst:
  * the open project's folder vanishing and an unknown one appearing.
  */
 const roots: { gone: string | null; added: string | null; timer?: ReturnType<typeof setTimeout> } = { gone: null, added: null };
@@ -77,7 +78,7 @@ function rootChanged(project: string) {
     if (!gone || gone !== useApp.getState().current || (await projectExists(gone))) return;
     if (added && (await projectExists(added))) return void useProject.getState().followRename(gone, added);
     if (gone !== useApp.getState().current) return;
-    useApp.getState().toast(`“${gone}” was moved or deleted outside Folio.`, "error");
+    useApp.getState().toast(`“${gone}” was moved or deleted outside QuillTex.`, "error");
     useApp.getState().openProject(null);
   }, 600);
 }
@@ -166,6 +167,16 @@ export default function App() {
       }),
     ];
     return () => unsubs.forEach((u) => u.then((f) => f()));
+  }, []);
+
+  // Look for a new release at launch and whenever the window regains focus.
+  useEffect(() => {
+    const recheck = () => {
+      if (Date.now() - useUpdater.getState().checkedAt > 30 * 60_000) void useUpdater.getState().check();
+    };
+    recheck();
+    window.addEventListener("focus", recheck);
+    return () => window.removeEventListener("focus", recheck);
   }, []);
 
   // Refresh git state and fetch when the window regains focus.

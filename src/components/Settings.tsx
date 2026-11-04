@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { CheckCircle2, Github, Loader2, Settings as Gear, Sparkles, Sigma, Trash2, XCircle, Copy, ExternalLink, RefreshCw } from "lucide-react";
+import { CheckCircle2, Github, Loader2, Settings as Gear, Sparkles, Sigma, Trash2, XCircle, Copy, ExternalLink, RefreshCw, Info, ArrowDownToLine } from "lucide-react";
 import { api, errorMessage, type GithubUser, type LoginCode, type UsageWindow } from "@/lib/ipc";
 import { compactNumber } from "@/lib/format";
 import { useApp, type SettingsTab } from "@/stores/app";
+import { useUpdater } from "@/stores/updater";
+import { getVersion } from "@tauri-apps/api/app";
 import { Dialog } from "./ui/Dialog";
 
 const TABS: [SettingsTab, string, JSX.Element][] = [
@@ -13,6 +15,7 @@ const TABS: [SettingsTab, string, JSX.Element][] = [
   ["github", "GitHub", <Github size={15} key="h" />],
   ["claude", "Claude Code", <Sparkles size={15} key="c" />],
   ["latex", "LaTeX", <Sigma size={15} key="l" />],
+  ["about", "About", <Info size={15} key="a" />],
   ["uninstall", "Uninstall", <Trash2 size={15} key="u" />],
 ];
 
@@ -36,6 +39,7 @@ export function SettingsDialog() {
           {tab === "github" && <GithubTab />}
           {tab === "claude" && <ClaudeTab />}
           {tab === "latex" && <LatexTab />}
+          {tab === "about" && <AboutTab />}
           {tab === "uninstall" && <UninstallTab />}
         </div>
       </div>
@@ -196,7 +200,7 @@ function GithubTab() {
       {!info.ghInstalled ? (
         <div className="field">
           <span className="hint">
-            Folio signs in through the GitHub CLI (<code>gh</code>). Install it, then come back here.
+            QuillTex signs in through the GitHub CLI (<code>gh</code>). Install it, then come back here.
             {info.platform === "macos" && (
               <>
                 {" "}With Homebrew: <code>brew install gh</code>
@@ -269,7 +273,7 @@ function GithubTab() {
       )}
       {error && <div className="banner red">{error}</div>}
       <span className="hint muted" style={{ fontSize: 12 }}>
-        Folio uses your GitHub CLI sign-in and the git installed on this computer, with your own git config, credential
+        QuillTex uses your GitHub CLI sign-in and the git installed on this computer, with your own git config, credential
         helpers and SSH keys. It stores no tokens.
       </span>
     </>
@@ -287,8 +291,8 @@ function resetsIn(secs: number): string {
 
 function UsageBar({ w }: { w: UsageWindow }) {
   const pct = (f: number) => `${(Math.min(1, Math.max(0, f)) * 100).toFixed(1)}%`;
-  const folio = w.totalTokens ? w.utilization * (w.folioTokens / w.totalTokens) : 0;
-  const other = Math.max(0, w.utilization - folio);
+  const quilltex = w.totalTokens ? w.utilization * (w.quilltexTokens / w.totalTokens) : 0;
+  const other = Math.max(0, w.utilization - quilltex);
   const limit = w.estimatedLimit;
   return (
     <div className="usage-window">
@@ -298,14 +302,14 @@ function UsageBar({ w }: { w: UsageWindow }) {
       </div>
       <div className="usage-bar" title={`${Math.round(w.utilization * 100)}% of the limit used`}>
         <div className="seg other" style={{ width: pct(other) }} />
-        <div className="seg folio" style={{ width: pct(folio) }} />
+        <div className="seg quilltex" style={{ width: pct(quilltex) }} />
       </div>
       <div className="usage-legend">
         <span>
-          <i className="dot other" /> Everything else {compactNumber(w.totalTokens - w.folioTokens)}
+          <i className="dot other" /> Everything else {compactNumber(w.totalTokens - w.quilltexTokens)}
         </span>
         <span>
-          <i className="dot folio" /> Folio {compactNumber(w.folioTokens)}
+          <i className="dot quilltex" /> QuillTex {compactNumber(w.quilltexTokens)}
         </span>
       </div>
       <div className="usage-numbers">
@@ -366,7 +370,7 @@ function ClaudeTab() {
       if (settings.mcpRegistered) await api.mcpUnregister();
       else await api.mcpRegister();
       useApp.setState({ settings: await api.getSettings() });
-      toast(settings.mcpRegistered ? "Removed from Claude Code" : "Folio is now available in Claude Code", "success");
+      toast(settings.mcpRegistered ? "Removed from Claude Code" : "QuillTex is now available in Claude Code", "success");
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -399,15 +403,15 @@ function ClaudeTab() {
       </div>
       <div className="setting-row">
         <div className="text">
-          <strong>Use Folio from Claude Code in your terminal</strong>
-          <span>Registers Folio’s MCP server with Claude Code (user scope) so `claude` can manage your projects anywhere.</span>
+          <strong>Use QuillTex from Claude Code in your terminal</strong>
+          <span>Registers QuillTex’s MCP server with Claude Code (user scope) so `claude` can manage your projects anywhere.</span>
         </div>
         <button className={`switch${settings.mcpRegistered ? " on" : ""}`} disabled={busy || !info?.claude} onClick={toggleMcp} />
       </div>
       {info?.claude && <UsageSection />}
       <div className="banner blue">
         <span>
-          The assistant only gets Folio’s tools (projects, files, compile, git). Shell, file system and web tools are
+          The assistant only gets QuillTex’s tools (projects, files, compile, git). Shell, file system and web tools are
           disabled, and it runs from an empty folder, so it can’t read or change anything outside your projects.
         </span>
       </div>
@@ -416,26 +420,104 @@ function ClaudeTab() {
 }
 
 function LatexTab() {
-  const info = useApp((s) => s.info);
+  const { info, refreshInfo, toast } = useApp();
+  const [progress, setProgress] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const install = async () => {
+    setBusy(true);
+    setProgress("Starting…");
+    const unlisten = await listen<string>("texlive-status", (e) => setProgress(e.payload));
+    try {
+      await api.installTexlive();
+      await refreshInfo();
+      toast("TeX Live is ready", "success");
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      unlisten();
+      setProgress(null);
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.removeTexlive();
+      await refreshInfo();
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <h3>LaTeX</h3>
       <Status ok={!!info?.tectonic}>
         {info?.tectonic ? "Tectonic is bundled and ready." : "Bundled Tectonic is missing. Run `npm run sidecars`."}
       </Status>
-      <Status ok={!!info?.systemTex}>
-        {info?.systemTex ? (
-          <>
-            System TeX found at <span className="mono">{info.systemTex}</span> (pdfLaTeX, XeLaTeX and LuaLaTeX via latexmk).
-          </>
+      <div className="setting-row">
+        <div className="text">
+          <strong>TeX Live (pdfLaTeX, XeLaTeX, LuaLaTeX)</strong>
+          <span>
+            {progress ??
+              (info?.texlive
+                ? "Installed inside QuillTex. Missing packages are added automatically when a document needs them."
+                : "Downloaded on the first compile that uses it (about 70 MB), or now.")}
+          </span>
+        </div>
+        {info?.texlive ? (
+          <button className="btn" disabled={busy} onClick={remove}>
+            <Trash2 size={13} /> Remove
+          </button>
         ) : (
-          "No system TeX distribution. That’s fine: Tectonic covers most documents. Install MacTeX, TeX Live or MiKTeX to use pdfLaTeX, LuaLaTeX or shell-escape packages."
+          <button className="btn" disabled={busy} onClick={install}>
+            {busy ? <Loader2 size={13} className="spin" /> : <ArrowDownToLine size={13} />} Install
+          </button>
         )}
-      </Status>
+      </div>
       <span className="hint muted" style={{ fontSize: 12 }}>
-        Tectonic downloads the packages a document needs on first compile and caches them inside Folio’s own cache folder.
-        Pick the compiler per project under Project settings.
+        Both compilers live in QuillTex’s own folders and are never added to your PATH, so they don’t touch, and aren’t
+        used by, any other TeX on this computer. Pick the compiler per project under Project settings.
       </span>
+    </>
+  );
+}
+
+function AboutTab() {
+  const [version, setVersion] = useState("");
+  const { phase, version: next, progress, error, check, install } = useUpdater();
+  useEffect(() => {
+    void getVersion().then(setVersion);
+  }, []);
+  const busy = phase === "checking" || phase === "downloading";
+  return (
+    <>
+      <h3>About</h3>
+      <div className="setting-row">
+        <div className="text">
+          <strong>QuillTex {version}</strong>
+          <span>
+            {phase === "checking" && "Checking for updates…"}
+            {phase === "downloading" && `Downloading ${next}${progress ? ` (${Math.round(progress * 100)}%)` : "…"}`}
+            {phase === "available" && `Version ${next} is available`}
+            {phase === "error" && `Couldn’t check for updates: ${error}`}
+            {phase === "idle" && "You’re on the latest version"}
+          </span>
+        </div>
+        {phase === "available" ? (
+          <button className="btn primary" onClick={() => void install()}>
+            <ArrowDownToLine size={14} /> Update and restart
+          </button>
+        ) : (
+          <button className="btn" disabled={busy} onClick={() => void check()}>
+            {busy ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Check now
+          </button>
+        )}
+      </div>
     </>
   );
 }
@@ -446,7 +528,7 @@ function UninstallTab() {
     <>
       <h3>Uninstall</h3>
       <p className="muted" style={{ margin: 0 }}>
-        Folio keeps everything in its own folders: settings, the TeX package cache and chat history. Uninstalling removes
+        QuillTex keeps everything in its own folders: settings, the TeX package cache and chat history. Uninstalling removes
         all of it, the saved GitHub token and the Claude Code registration. You choose whether your projects stay.
       </p>
       <button
@@ -457,7 +539,7 @@ function UninstallTab() {
           openDialog({ kind: "uninstall" });
         }}
       >
-        <Trash2 size={14} /> Uninstall Folio…
+        <Trash2 size={14} /> Uninstall QuillTex…
       </button>
     </>
   );

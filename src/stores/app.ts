@@ -34,7 +34,7 @@ export interface Toast {
   message: string;
 }
 
-export type SettingsTab = "general" | "github" | "claude" | "latex" | "uninstall";
+export type SettingsTab = "general" | "github" | "claude" | "latex" | "about" | "uninstall";
 
 interface UI {
   sidebar: boolean;
@@ -69,7 +69,7 @@ interface AppState {
   setSync: (s: SyncStatus) => void;
 }
 
-const UI_KEY = "folio.ui";
+const UI_KEY = "quilltex.ui";
 
 function loadUi(): UI {
   const base: UI = { sidebar: true, pdf: true, chat: false, logs: false, sidebarTab: "files", palette: false, settings: null };
@@ -108,7 +108,7 @@ export const useApp = create<AppState>((set, get) => ({
       .catch(() => {});
     await get().refreshProjects();
     try {
-      const last = localStorage.getItem("folio.lastProject");
+      const last = localStorage.getItem("quilltex.lastProject");
       if (last && get().projects.some((p) => p.name === last)) get().openProject(last);
     } catch {
       /* storage unavailable */
@@ -147,8 +147,8 @@ export const useApp = create<AppState>((set, get) => ({
   openProject(name) {
     set({ current: name });
     try {
-      if (name) localStorage.setItem("folio.lastProject", name);
-      else localStorage.removeItem("folio.lastProject");
+      if (name) localStorage.setItem("quilltex.lastProject", name);
+      else localStorage.removeItem("quilltex.lastProject");
     } catch {
       /* ignore */
     }

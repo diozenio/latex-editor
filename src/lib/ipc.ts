@@ -25,7 +25,7 @@ export interface UsageWindow {
   /** Unix seconds. */
   resetsAt: number;
   totalTokens: number;
-  folioTokens: number;
+  quilltexTokens: number;
   /** Claude Code doesn't report a token limit; this is derived from spend / utilization. */
   estimatedLimit: number | null;
 }
@@ -122,7 +122,8 @@ export interface AppInfo {
   platform: "macos" | "windows" | "linux";
   projectsRoot: string;
   tectonic: boolean;
-  systemTex: string | null;
+  /** QuillTex's private TeX Live (pdfLaTeX/XeLaTeX/LuaLaTeX) is downloaded. */
+  texlive: boolean;
   claude: string | null;
   ghInstalled: boolean;
   githubConnected: boolean;
@@ -191,6 +192,8 @@ export const api = {
     invoke<string[]>("import_files", { project, paths, destDir }),
 
   compile: (project: string) => invoke<CompileResult>("compile_project", { project }),
+  installTexlive: () => invoke<void>("install_texlive"),
+  removeTexlive: () => invoke<void>("remove_texlive"),
   cleanBuild: (project: string) => invoke<void>("clean_build", { project }),
   savePdfAs: (project: string, dest: string) => invoke<void>("save_pdf_as", { project, dest }),
   synctexForward: (project: string, file: string, line: number) =>
