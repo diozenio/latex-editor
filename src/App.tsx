@@ -4,7 +4,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Loader2, PanelLeftOpen } from "lucide-react";
 import { api, type SyncStatus } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
-import { useProject } from "@/stores/project";
+import { projectExists, useProject } from "@/stores/project";
 import { mod } from "@/lib/format";
 import { Sidebar } from "@/components/Sidebar";
 import { Home, importZipFlow } from "@/components/Home";
@@ -58,6 +58,30 @@ function runAction(id: string) {
   }
 }
 
+/**
+ * A project folder renamed outside Folio shows up as two root events in one burst:
+ * the open project's folder vanishing and an unknown one appearing.
+ */
+const roots: { gone: string | null; added: string | null; timer?: ReturnType<typeof setTimeout> } = { gone: null, added: null };
+
+function rootChanged(project: string) {
+  const app = useApp.getState();
+  if (project === app.current) roots.gone = project;
+  else if (!app.projects.some((p) => p.name === project)) roots.added = project;
+  else return;
+  clearTimeout(roots.timer);
+  // Give the assistant's own rename report a chance to land first.
+  roots.timer = setTimeout(async () => {
+    const { gone, added } = roots;
+    roots.gone = roots.added = null;
+    if (!gone || gone !== useApp.getState().current || (await projectExists(gone))) return;
+    if (added && (await projectExists(added))) return void useProject.getState().followRename(gone, added);
+    if (gone !== useApp.getState().current) return;
+    useApp.getState().toast(`“${gone}” was moved or deleted outside Folio.`, "error");
+    useApp.getState().openProject(null);
+  }, 600);
+}
+
 // Keyboard shortcuts for platforms without a native menu bar handling them.
 const SHORTCUTS: Record<string, string> = {
   k: "command-palette",
@@ -93,8 +117,9 @@ export default function App() {
   // Load the project whenever the selection changes.
   useEffect(() => {
     const p = useProject.getState();
-    if (current) void p.load(current);
-    else p.unload();
+    // A rename already updated the loaded project in place.
+    if (!current) p.unload();
+    else if (p.project?.name !== current) void p.load(current);
   }, [current]);
 
   useEffect(() => {
@@ -102,6 +127,7 @@ export default function App() {
       listen<string>("menu", (e) => void runAction(e.payload)),
       listen<{ project: string; paths: string[] }>("fs-changed", (e) => {
         const { project, paths } = e.payload;
+        if (paths.includes("")) rootChanged(project);
         if (project === useApp.getState().current) void useProject.getState().onExternalChange(paths);
         clearTimeout(refreshTimer.current);
         refreshTimer.current = setTimeout(() => void useApp.getState().refreshProjects(), 600);
