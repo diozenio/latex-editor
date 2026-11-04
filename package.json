@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "sidecars": "node scripts/fetch-sidecars.mjs",
     "tauri": "tauri",
-    "app:dev": "node scripts/fetch-sidecars.mjs && tauri dev",
+    "app:dev": "node scripts/fetch-sidecars.mjs --skip-engines && tauri dev",
     "app:build": "node scripts/fetch-sidecars.mjs && tauri build"
   },
   "dependencies": {

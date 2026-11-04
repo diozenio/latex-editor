@@ -146,6 +146,7 @@ async function prepareEngines() {
   const bundle = join(work, asset);
   if (exists(url)) {
     download(url, bundle);
+    mkdirSync(resourcesDir, { recursive: true });
     for (const name of ["tectonic-cache", "texlive"]) {
       rmSync(join(resourcesDir, name), { recursive: true, force: true });
     }
@@ -287,4 +288,10 @@ function buildMcp() {
 mkdirSync(binDir, { recursive: true });
 await fetchTectonic();
 if (!args.includes("--skip-mcp")) buildMcp();
-if (!args.includes("--skip-engines")) await prepareEngines();
+if (args.includes("--skip-engines")) {
+  for (const name of ["tectonic-cache", "texlive"]) {
+    mkdirSync(join(resourcesDir, name), { recursive: true });
+  }
+} else {
+  await prepareEngines();
+}
