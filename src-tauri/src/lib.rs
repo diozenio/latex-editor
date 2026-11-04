@@ -155,6 +155,7 @@ pub fn run() {
             commands::compile_project,
             commands::install_texlive,
             commands::remove_texlive,
+            commands::relaunch_app,
             commands::clean_build,
             commands::save_pdf_as,
             commands::synctex_forward,

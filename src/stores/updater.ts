@@ -1,7 +1,6 @@
-import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { create } from "zustand";
-import { errorMessage } from "@/lib/ipc";
+import { api, errorMessage } from "@/lib/ipc";
 
 type Phase = "idle" | "checking" | "available" | "downloading" | "error";
 
@@ -27,6 +26,10 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
 
   async check() {
     if (get().phase === "checking" || get().phase === "downloading") return;
+    if (import.meta.env.DEV) {
+      set({ phase: "idle", version: null, checkedAt: Date.now() });
+      return;
+    }
     set({ phase: "checking", error: null });
     try {
       pending = await check();
@@ -53,7 +56,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
           if (total) set({ progress: done / total });
         }
       });
-      await relaunch();
+      await api.relaunchApp();
     } catch (e) {
       set({ phase: "error", error: errorMessage(e), progress: null });
     }

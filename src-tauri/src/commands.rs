@@ -220,6 +220,29 @@ pub async fn install_texlive(app: AppHandle, state: State<'_, AppState>) -> CmdR
 }
 
 #[tauri::command]
+pub fn relaunch_app(app: AppHandle) -> CmdResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let exe = std::env::current_exe().map_err(err)?;
+        let bundle = exe.ancestors().nth(3).filter(|p| p.extension().is_some_and(|e| e == "app"));
+        if let Some(bundle) = bundle {
+            let script = format!(
+                "while kill -0 {} 2>/dev/null; do sleep 0.1; done; open \"$1\"",
+                std::process::id()
+            );
+            std::process::Command::new("/bin/sh")
+                .args(["-c", &script, "sh"])
+                .arg(bundle)
+                .spawn()
+                .map_err(err)?;
+            app.exit(0);
+            return Ok(());
+        }
+    }
+    app.restart()
+}
+
+#[tauri::command]
 pub async fn remove_texlive(state: State<'_, AppState>) -> CmdResult<()> {
     let root = state.toolchain.read().unwrap().texlive.clone().ok_or("TeX Live is not available")?;
     blocking(move || texlive::remove(&root).map_err(err)).await

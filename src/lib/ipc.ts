@@ -217,6 +217,7 @@ export const api = {
   compile: (project: string) =>
     invoke<CompileResult>("compile_project", { project }),
   installTexlive: () => invoke<void>("install_texlive"),
+  relaunchApp: () => invoke<void>("relaunch_app"),
   removeTexlive: () => invoke<void>("remove_texlive"),
   cleanBuild: (project: string) => invoke<void>("clean_build", { project }),
   savePdfAs: (project: string, dest: string) =>
