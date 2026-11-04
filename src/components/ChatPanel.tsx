@@ -4,7 +4,7 @@ import { ArrowUp, Check, Loader2, Plus, Sparkles, Square, Wrench, X, AlertCircle
 import { create } from "zustand";
 import { api, errorMessage } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
-import { useProject } from "@/stores/project";
+import { onProjectRenamed, useProject } from "@/stores/project";
 
 type Part =
   | { kind: "text"; text: string }
@@ -39,6 +39,33 @@ const useChats = create<ChatStore>((set, get) => ({
 
 // One stream state per running chat.
 const streams = new Map<string, { sawDelta: boolean }>();
+/** A running process keeps the id it started with; renaming its project moves the chat to a new key. */
+const aliases = new Map<string, string>();
+const chatKey = (id: string) => aliases.get(id) ?? id;
+const processId = (key: string) => [...aliases].find(([, k]) => k === key)?.[0] ?? key;
+
+onProjectRenamed((from, to) => {
+  const a = `project-${from}`;
+  const b = `project-${to}`;
+  const s = useChats.getState();
+  const chat = s.chats[a];
+  if (!chat) {
+    // Never opened this session: move the saved history.
+    void api.chatLoad<Chat>(a).then((c) => {
+      if (!c) return;
+      void api.chatSave(b, c);
+      void api.chatSave(a, null);
+    });
+    return;
+  }
+  const { [a]: _, ...chats } = s.chats;
+  const { [a]: running, ...rest } = s.running;
+  useChats.setState({ chats: { ...chats, [b]: chat }, running: { ...rest, [b]: !!running } });
+  for (const [id, k] of aliases) if (k === a) aliases.set(id, b);
+  if (running && !aliases.has(a)) aliases.set(a, b);
+  void api.chatSave(b, chat);
+  void api.chatSave(a, null);
+});
 
 function update(key: string, fn: (msgs: Msg[]) => Msg[], sessionId?: string) {
   const s = useChats.getState();
@@ -59,9 +86,10 @@ function appendText(m: Msg, text: string): Msg {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function handleEvent(key: string, ev: any) {
-  const st = streams.get(key) ?? { sawDelta: false };
-  streams.set(key, st);
+function handleEvent(id: string, ev: any) {
+  const st = streams.get(id) ?? { sawDelta: false };
+  streams.set(id, st);
+  const key = chatKey(id);
   switch (ev.type) {
     case "system":
       if (ev.session_id) update(key, (m) => m, ev.session_id);
@@ -106,6 +134,7 @@ function handleEvent(key: string, ev: any) {
             ),
           })),
         );
+        if (!b.is_error) followTool(key, b.tool_use_id);
       }
       break;
     }
@@ -119,6 +148,18 @@ function handleEvent(key: string, ev: any) {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+/** Keep the open project in step with what the assistant just did to it. */
+function followTool(key: string, toolId: string) {
+  const part = useChats
+    .getState()
+    .get(key)
+    .messages.flatMap((m) => m.parts)
+    .find((p) => p.kind === "tool" && p.id === toolId);
+  if (part?.kind !== "tool" || part.name.replace(/^mcp__folio__/, "") !== "rename_project") return;
+  const { project, new_name } = part.input as { project?: string; new_name?: string };
+  if (project && new_name?.trim()) void useProject.getState().followRename(project, new_name.trim());
+}
+
 let listening = false;
 function ensureListeners() {
   if (listening) return;
@@ -126,15 +167,17 @@ function ensureListeners() {
   void listen<{ chatId: string; event: unknown }>("chat-event", (e) => handleEvent(e.payload.chatId, e.payload.event));
   void listen<{ chatId: string; ok: boolean; error: string | null }>("chat-done", (e) => {
     const { chatId, error } = e.payload;
+    const key = chatKey(chatId);
+    aliases.delete(chatId);
     const s = useChats.getState();
-    s.setRunning(chatId, false);
+    s.setRunning(key, false);
     streams.delete(chatId);
-    if (error) update(chatId, (msgs) => withLastAssistant(msgs, (m) => appendText(m, `\n\n⚠️ ${error.slice(0, 600)}`)));
+    if (error) update(key, (msgs) => withLastAssistant(msgs, (m) => appendText(m, `\n\n⚠️ ${error.slice(0, 600)}`)));
     // Mark tools that never reported as done.
-    update(chatId, (msgs) =>
+    update(key, (msgs) =>
       msgs.map((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === "tool" && p.status === "running" ? { ...p, status: "done" } : p)) })),
     );
-    void api.chatSave(chatId, useChats.getState().get(chatId));
+    void api.chatSave(key, useChats.getState().get(key));
   });
 }
 
@@ -302,7 +345,7 @@ export function ChatPanel() {
               ))}
             </select>
             {running ? (
-              <button className="send-btn" title="Stop" onClick={() => api.chatCancel(key)}>
+              <button className="send-btn" title="Stop" onClick={() => api.chatCancel(processId(key))}>
                 <Square size={11} fill="currentColor" />
               </button>
             ) : (
