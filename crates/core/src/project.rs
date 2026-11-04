@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{paths::validate_name, templates, Error, Result, Workspace};
 
-pub const META_DIR: &str = ".folio";
-pub const BUILD_DIR: &str = ".folio/build";
-const META_FILE: &str = ".folio/project.json";
-const GITIGNORE: &str = ".folio/build/\n.DS_Store\n";
+pub const META_DIR: &str = ".quilltex";
+pub const BUILD_DIR: &str = ".quilltex/build";
+const META_FILE: &str = ".quilltex/project.json";
+const GITIGNORE: &str = ".quilltex/build/\n.DS_Store\n";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -95,13 +95,13 @@ fn last_modified(dir: &Path) -> i64 {
         .unwrap_or(0)
 }
 
-/// `.git` and `.folio/build` are implementation details, not user content.
+/// `.git` and `.quilltex/build` are implementation details, not user content.
 pub fn is_internal(path: &Path, project_dir: &Path) -> bool {
     let rel = path.strip_prefix(project_dir).unwrap_or(path);
     let mut comps = rel.components().map(|c| c.as_os_str().to_string_lossy());
     match comps.next().as_deref() {
         Some(".git") => true,
-        Some(".folio") => comps.next().as_deref() == Some("build"),
+        Some(".quilltex") => comps.next().as_deref() == Some("build"),
         _ => false,
     }
 }
@@ -127,28 +127,92 @@ pub fn write_meta(ws: &Workspace, name: &str, meta: &ProjectMeta) -> Result<()> 
     Ok(())
 }
 
-/// For folders created outside Folio (unzipped, cloned): find the file with
-/// `\documentclass`, preferring main.tex.
+/// For folders created outside QuillTex (unzipped, cloned): find the file with
+/// `\documentclass`, preferring main.tex, and the engine the project was set up for.
 fn guess_meta(dir: &Path) -> ProjectMeta {
     let mut meta = ProjectMeta::default();
-    if dir.join("main.tex").exists() {
-        return meta;
-    }
-    let found = walkdir::WalkDir::new(dir)
-        .max_depth(3)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "tex"))
-        .find(|e| std::fs::read_to_string(e.path()).is_ok_and(|s| s.contains("\\documentclass")));
-    if let Some(e) = found {
-        if let Ok(rel) = e.path().strip_prefix(dir) {
-            meta.main_file = rel.to_string_lossy().replace('\\', "/");
+    let rc = [".latexmkrc", "latexmkrc"].iter().find_map(|f| std::fs::read_to_string(dir.join(f)).ok());
+    let rc_main = rc.as_deref().and_then(latexmkrc_main).filter(|f| dir.join(f).is_file());
+    if let Some(main) = rc_main {
+        meta.main_file = main;
+    } else if !dir.join("main.tex").exists() {
+        let found = walkdir::WalkDir::new(dir)
+            .max_depth(3)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|x| x == "tex"))
+            .find(|e| std::fs::read_to_string(e.path()).is_ok_and(|s| s.contains("\\documentclass")));
+        if let Some(e) = found {
+            if let Ok(rel) = e.path().strip_prefix(dir) {
+                meta.main_file = rel.to_string_lossy().replace('\\', "/");
+            }
         }
     }
+    let main = std::fs::read_to_string(dir.join(&meta.main_file)).unwrap_or_default();
+    meta.engine = magic_engine(&main).or_else(|| rc.as_deref().map(|rc| tex_live_engine(dir, rc))).unwrap_or_default();
     meta
 }
 
-/// Writes `.folio/project.json` and makes sure build output is git-ignored.
+/// `% !TEX program = lualatex` (TeXShop, VS Code LaTeX Workshop, TeXstudio).
+fn magic_engine(tex: &str) -> Option<Engine> {
+    let re = regex::Regex::new(r"(?im)^\s*%\s*!\s*TEX\s+(?:TS-)?program\s*=\s*([a-z]+)").unwrap();
+    let head: String = tex.lines().take(30).collect::<Vec<_>>().join("\n");
+    match re.captures(&head)?[1].to_ascii_lowercase().as_str() {
+        "pdflatex" | "latex" => Some(Engine::LatexmkPdflatex),
+        "xelatex" => Some(Engine::LatexmkXelatex),
+        "lualatex" => Some(Engine::LatexmkLualatex),
+        _ => None,
+    }
+}
+
+/// A project that brings a latexmkrc was built with TeX Live. Its `$pdf_mode` is no
+/// guide (Overleaf, where most such projects come from, overrides it with the
+/// compiler picked in its menu, pdfLaTeX by default), so go by what the sources
+/// load: only Unicode-engine packages need XeLaTeX or LuaLaTeX.
+fn tex_live_engine(dir: &Path, rc: &str) -> Engine {
+    let package = regex::Regex::new(
+        r"\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}|\\directlua",
+    )
+    .unwrap();
+    let (mut unicode, mut lua) = (false, false);
+    let sources = walkdir::WalkDir::new(dir)
+        .max_depth(3)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "tex" || x == "sty" || x == "cls"));
+    for e in sources {
+        let text = std::fs::read_to_string(e.path()).unwrap_or_default();
+        for c in package.captures_iter(&text) {
+            let Some(names) = c.get(1) else {
+                lua = true;
+                continue;
+            };
+            for name in names.as_str().split(',').map(str::trim) {
+                match name {
+                    "fontspec" | "unicode-math" | "polyglossia" | "xeCJK" => unicode = true,
+                    "luacode" | "luatexja" | "luaotfload" | "lua-ul" | "luatexbase" => lua = true,
+                    _ => {}
+                }
+            }
+        }
+    }
+    let rc_lua = regex::Regex::new(r"(?m)^\s*\$pdf_mode\s*=\s*4").unwrap().is_match(rc);
+    if lua || (unicode && rc_lua) {
+        Engine::LatexmkLualatex
+    } else if unicode {
+        Engine::LatexmkXelatex
+    } else {
+        Engine::LatexmkPdflatex
+    }
+}
+
+/// `@default_files = ('thesis.tex');`
+fn latexmkrc_main(rc: &str) -> Option<String> {
+    let re = regex::Regex::new(r#"(?m)^\s*@default_files\s*=\s*\(\s*['"]([^'"]+)['"]"#).unwrap();
+    re.captures(rc).map(|c| c[1].to_string())
+}
+
+/// Writes `.quilltex/project.json` and makes sure build output is git-ignored.
 pub fn ensure_scaffold(ws: &Workspace, name: &str) -> Result<()> {
     let dir = ws.project_dir(name)?;
     if !dir.join(META_FILE).exists() {
@@ -165,7 +229,7 @@ pub fn ensure_scaffold(ws: &Workspace, name: &str) -> Result<()> {
     }
     let gi = dir.join(".gitignore");
     let current = std::fs::read_to_string(&gi).unwrap_or_default();
-    if !current.lines().any(|l| l.trim() == ".folio/build/") {
+    if !current.lines().any(|l| l.trim() == ".quilltex/build/") {
         let sep = if current.is_empty() || current.ends_with('\n') { "" } else { "\n" };
         std::fs::write(&gi, format!("{current}{sep}{GITIGNORE}"))?;
     }
@@ -275,7 +339,7 @@ mod tests {
         let ws = Workspace::new(tmp.path()).unwrap();
         create(&ws, "Thesis", "article").unwrap();
         assert!(ws.root().join("Thesis/main.tex").exists());
-        assert!(std::fs::read_to_string(ws.root().join("Thesis/.gitignore")).unwrap().contains(".folio/build/"));
+        assert!(std::fs::read_to_string(ws.root().join("Thesis/.gitignore")).unwrap().contains(".quilltex/build/"));
         assert!(create(&ws, "Thesis", "blank").is_err());
         rename(&ws, "Thesis", "Paper").unwrap();
         duplicate(&ws, "Paper", "Paper copy").unwrap();
@@ -292,5 +356,37 @@ mod tests {
         std::fs::write(ws.root().join("x/src/paper.tex"), "\\documentclass{article}").unwrap();
         ensure_scaffold(&ws, "x").unwrap();
         assert_eq!(read_meta(&ws, "x").unwrap().main_file, "src/paper.tex");
+    }
+
+    #[test]
+    fn guesses_engine_from_latexmkrc_and_magic_comment() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(tmp.path()).unwrap();
+        std::fs::create_dir_all(ws.root().join("a")).unwrap();
+        std::fs::write(ws.root().join("a/thesis.tex"), "\\documentclass{book}\\usepackage[T1]{fontenc}").unwrap();
+        std::fs::write(ws.root().join("a/notes.tex"), "\\documentclass{article}").unwrap();
+        std::fs::write(ws.root().join("a/.latexmkrc"), "$pdf_mode = 4;\n@default_files = ('thesis.tex');\n").unwrap();
+        ensure_scaffold(&ws, "a").unwrap();
+        let meta = read_meta(&ws, "a").unwrap();
+        assert_eq!(meta.main_file, "thesis.tex");
+        // Overleaf ignores $pdf_mode; nothing here needs LuaLaTeX.
+        assert_eq!(meta.engine, Engine::LatexmkPdflatex);
+
+        std::fs::create_dir_all(ws.root().join("d/style")).unwrap();
+        std::fs::write(ws.root().join("d/main.tex"), "\\documentclass{article}\\usepackage{style/x}").unwrap();
+        std::fs::write(ws.root().join("d/style/x.sty"), "\\RequirePackage{amsmath, fontspec}").unwrap();
+        std::fs::write(ws.root().join("d/.latexmkrc"), "$pdf_mode = 5;\n").unwrap();
+        ensure_scaffold(&ws, "d").unwrap();
+        assert_eq!(read_meta(&ws, "d").unwrap().engine, Engine::LatexmkXelatex);
+
+        std::fs::create_dir_all(ws.root().join("b")).unwrap();
+        std::fs::write(ws.root().join("b/main.tex"), "% !TEX program = xelatex\n\\documentclass{article}").unwrap();
+        ensure_scaffold(&ws, "b").unwrap();
+        assert_eq!(read_meta(&ws, "b").unwrap().engine, Engine::LatexmkXelatex);
+
+        std::fs::create_dir_all(ws.root().join("c")).unwrap();
+        std::fs::write(ws.root().join("c/main.tex"), "\\documentclass{article}").unwrap();
+        ensure_scaffold(&ws, "c").unwrap();
+        assert_eq!(read_meta(&ws, "c").unwrap().engine, Engine::Tectonic);
     }
 }

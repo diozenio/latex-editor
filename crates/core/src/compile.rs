@@ -6,19 +6,23 @@ use serde::Serialize;
 use wait_timeout::ChildExt;
 
 use crate::project::{self, Engine, BUILD_DIR};
-use crate::{Error, Result, Workspace};
+use crate::{texlive, Error, Result, Workspace};
 
 const TIMEOUT: Duration = Duration::from_secs(300);
 
-/// Where to find TeX binaries. Tectonic ships with the app as a sidecar; a
-/// system TeX distribution is optional.
+/// Missing-package installs tried per compile before giving up.
+const MAX_INSTALLS: usize = 60;
+
+/// Where to find TeX. Both engines belong to the app: Tectonic ships as a
+/// sidecar, and TeX Live is downloaded into the app's data dir on first use.
+/// A TeX installed on the computer is never used.
 #[derive(Debug, Clone, Default)]
 pub struct Toolchain {
     pub tectonic: Option<PathBuf>,
     /// Kept inside the app's own cache dir so uninstalling removes it.
     pub tectonic_cache: Option<PathBuf>,
-    /// Directory containing `latexmk` (TeX Live / MacTeX / MiKTeX).
-    pub system_tex_bin: Option<PathBuf>,
+    /// Root of the app's private TeX Live (may not be installed yet).
+    pub texlive: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -42,7 +46,7 @@ pub struct Diagnostic {
 #[serde(rename_all = "camelCase")]
 pub struct CompileResult {
     pub ok: bool,
-    /// Relative to the project, e.g. `.folio/build/main.pdf`.
+    /// Relative to the project, e.g. `.quilltex/build/main.pdf`.
     pub pdf: Option<String>,
     pub log: String,
     pub diagnostics: Vec<Diagnostic>,
@@ -50,6 +54,11 @@ pub struct CompileResult {
 }
 
 pub fn compile(ws: &Workspace, name: &str, tc: &Toolchain) -> Result<CompileResult> {
+    compile_with(ws, name, tc, &|_| {})
+}
+
+/// Like `compile`, reporting slow steps (setting up TeX Live, installing packages) to `status`.
+pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(&str)) -> Result<CompileResult> {
     let dir = ws.project_dir(name)?;
     let meta = project::read_meta(ws, name)?;
     let main = ws.resolve(name, &meta.main_file)?;
@@ -63,7 +72,7 @@ pub fn compile(ws: &Workspace, name: &str, tc: &Toolchain) -> Result<CompileResu
     let _ = std::fs::remove_file(&pdf_path);
 
     let started = Instant::now();
-    let mut cmd = match meta.engine {
+    let (success, console) = match meta.engine {
         Engine::Tectonic => {
             let bin = tc
                 .tectonic
@@ -76,33 +85,119 @@ pub fn compile(ws: &Workspace, name: &str, tc: &Toolchain) -> Result<CompileResu
             if let Some(cache) = &tc.tectonic_cache {
                 c.env("TECTONIC_CACHE_DIR", cache);
             }
-            c
+            hide_console(&mut c);
+            run(c, &dir)?
         }
         engine => {
-            let bin_dir = tc
-                .system_tex_bin
-                .clone()
-                .ok_or_else(|| Error::Compile("No system TeX distribution found (latexmk). Install TeX Live/MacTeX/MiKTeX or switch the engine to Tectonic.".into()))?;
+            let root = tc.texlive.clone().ok_or_else(|| Error::Compile("TeX Live is not available".into()))?;
+            if !texlive::is_installed(&root) {
+                status("Setting up TeX Live (first use)…");
+                texlive::install(&root, status)?;
+            }
+            let rc = texlive::latexmkrc(&root)?;
             let flag = match engine {
                 Engine::LatexmkXelatex => "-xelatex",
                 Engine::LatexmkLualatex => "-lualatex",
                 _ => "-pdf",
             };
-            let mut c = Command::new(bin_dir.join(exe("latexmk")));
-            c.args([flag, "-interaction=nonstopmode", "-file-line-error", "-synctex=1", "-halt-on-error"])
-                .arg(format!("-outdir={}", out_dir.display()))
-                .arg(&meta.main_file);
-            // latexmk spawns pdflatex & friends; they must be on PATH.
-            let path = std::env::var_os("PATH").unwrap_or_default();
-            let mut paths = vec![bin_dir];
-            paths.extend(std::env::split_paths(&path));
-            c.env("PATH", std::env::join_paths(paths).map_err(|e| Error::Other(e.to_string()))?);
-            c
+            let latexmk = |force: bool| -> Result<Command> {
+                let mut c = texlive::command(&root, "latexmk")?;
+                // -norc: a project's .latexmkrc is Perl that would run with the user's rights.
+                c.arg("-norc").arg("-r").arg(&rc);
+                if force {
+                    c.arg("-g");
+                }
+                c.args([flag, "-interaction=nonstopmode", "-file-line-error", "-synctex=1", "-halt-on-error"])
+                    .arg(format!("-outdir={}", out_dir.display()))
+                    .arg(&meta.main_file);
+                Ok(c)
+            };
+            // Each failed run names the next missing file; install it and go again.
+            let mut notes = String::new();
+            let mut tried: Vec<String> = Vec::new();
+            let mut outcome = run(latexmk(false)?, &dir)?;
+            while !outcome.0 && tried.len() < MAX_INSTALLS {
+                let log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
+                let Some(missing) = texlive::find_missing(&format!("{}\n{log}", outcome.1)) else { break };
+                let package = match &missing {
+                    texlive::Missing::Package(p) => Some(p.clone()),
+                    texlive::Missing::Language(lang) => {
+                        let (babel, hyphen) = texlive::language_packages(lang);
+                        // Patterns are optional: without them the document still builds, unhyphenated.
+                        if let Some(h) = hyphen.filter(|h| !tried.contains(h)) {
+                            if texlive::install_packages(&root, &[&h]).is_ok() {
+                                notes.push_str(&format!("QuillTex: installed TeX package `{h}`\n"));
+                            }
+                            tried.push(h);
+                        }
+                        Some(babel)
+                    }
+                    texlive::Missing::File(f) => {
+                        status(&format!("Looking up {f}…"));
+                        texlive::package_for_file(&root, f)
+                    }
+                };
+                let Some(package) = package.filter(|p| !tried.contains(p)) else { break };
+                status(&format!("Installing TeX package {package}…"));
+                tried.push(package.clone());
+                if let Err(e) = texlive::install_packages(&root, &[&package]) {
+                    notes.push_str(&format!("QuillTex: could not install TeX package `{package}`: {e}\n"));
+                    break;
+                }
+                notes.push_str(&format!("QuillTex: installed TeX package `{package}`\n"));
+                status("Compiling…");
+                outcome = run(latexmk(true)?, &dir)?;
+            }
+            // Built, but without packages a full TeX Live has that change the result
+            // (line breaks, glossary titles): add them and build once more.
+            if outcome.0 {
+                let log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
+                let mut installed = Vec::new();
+                for p in texlive::find_optional(&log).into_iter().filter(|p| !tried.contains(p)) {
+                    status(&format!("Installing TeX package {p}…"));
+                    if texlive::install_packages(&root, &[&p]).is_ok() {
+                        notes.push_str(&format!("QuillTex: installed TeX package `{p}`\n"));
+                        installed.push(p);
+                    }
+                }
+                if !installed.is_empty() {
+                    status("Compiling…");
+                    outcome = run(latexmk(true)?, &dir)?;
+                }
+            }
+            (outcome.0, format!("{notes}{}", outcome.1))
         }
     };
-    cmd.current_dir(&dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    hide_console(&mut cmd);
 
+    // Prefer the full TeX log; fall back to console output.
+    let tex_log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
+    let mut diagnostics = parse_log(&console);
+    for d in parse_log(&tex_log) {
+        if !diagnostics.iter().any(|x| x.message == d.message && x.line == d.line) {
+            diagnostics.push(d);
+        }
+    }
+    let pdf_exists = pdf_path.is_file();
+    if !success && diagnostics.iter().all(|d| d.severity != Severity::Error) {
+        diagnostics.insert(0, Diagnostic {
+            severity: Severity::Error,
+            file: None,
+            line: None,
+            message: console.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("compilation failed").to_string(),
+        });
+    }
+    Ok(CompileResult {
+        ok: success && pdf_exists,
+        pdf: pdf_exists.then(|| format!("{BUILD_DIR}/{stem}.pdf")),
+        log: if tex_log.is_empty() { console } else { format!("{console}\n{tex_log}") },
+        diagnostics,
+        duration_ms: started.elapsed().as_millis() as u64,
+    })
+}
+
+/// Runs a compiler in `dir`; returns whether it succeeded and its console output.
+fn run(mut cmd: Command, dir: &Path) -> Result<(bool, String)> {
+    cmd.current_dir(dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| Error::Compile(format!("failed to start compiler: {e}")))?;
     // Drain pipes on threads so a chatty compiler can't deadlock us.
     let mut so = child.stdout.take().unwrap();
@@ -118,31 +213,7 @@ pub fn compile(ws: &Workspace, name: &str, tc: &Toolchain) -> Result<CompileResu
         }
     };
     let console = format!("{}{}", t1.join().unwrap_or_default(), t2.join().unwrap_or_default());
-
-    // Prefer the full TeX log; fall back to console output.
-    let tex_log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
-    let mut diagnostics = parse_log(&console);
-    for d in parse_log(&tex_log) {
-        if !diagnostics.iter().any(|x| x.message == d.message && x.line == d.line) {
-            diagnostics.push(d);
-        }
-    }
-    let pdf_exists = pdf_path.is_file();
-    if !status.success() && diagnostics.iter().all(|d| d.severity != Severity::Error) {
-        diagnostics.insert(0, Diagnostic {
-            severity: Severity::Error,
-            file: None,
-            line: None,
-            message: console.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("compilation failed").to_string(),
-        });
-    }
-    Ok(CompileResult {
-        ok: status.success() && pdf_exists,
-        pdf: pdf_exists.then(|| format!("{BUILD_DIR}/{stem}.pdf")),
-        log: if tex_log.is_empty() { console } else { format!("{console}\n{tex_log}") },
-        diagnostics,
-        duration_ms: started.elapsed().as_millis() as u64,
-    })
+    Ok((status.success(), console))
 }
 
 /// Remove build output.
@@ -160,6 +231,7 @@ fn read_all(r: &mut impl std::io::Read) -> String {
     String::from_utf8_lossy(&buf).into_owned()
 }
 
+#[cfg(test)]
 fn exe(name: &str) -> String {
     if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }
 }
@@ -171,34 +243,6 @@ pub(crate) fn hide_console(cmd: &mut Command) {
 }
 #[cfg(not(windows))]
 pub(crate) fn hide_console(_: &mut Command) {}
-
-/// Finds a directory containing `latexmk`.
-pub fn detect_system_tex() -> Option<PathBuf> {
-    let mut candidates: Vec<PathBuf> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).collect())
-        .unwrap_or_default();
-    candidates.extend(
-        ["/Library/TeX/texbin", "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"]
-            .iter()
-            .map(PathBuf::from),
-    );
-    for base in ["/usr/local/texlive", "C:\\texlive"] {
-        if let Ok(years) = std::fs::read_dir(base) {
-            let mut years: Vec<_> = years.filter_map(|e| e.ok()).map(|e| e.path()).collect();
-            years.sort();
-            for y in years.into_iter().rev() {
-                if let Ok(arches) = std::fs::read_dir(y.join("bin")) {
-                    candidates.extend(arches.filter_map(|e| e.ok()).map(|e| e.path()));
-                }
-            }
-        }
-    }
-    if let Some(local) = dirs::data_local_dir() {
-        candidates.push(local.join("Programs/MiKTeX/miktex/bin/x64"));
-    }
-    candidates.push(PathBuf::from("C:\\Program Files\\MiKTeX\\miktex\\bin\\x64"));
-    candidates.into_iter().find(|d| d.join(exe("latexmk")).is_file())
-}
 
 pub fn parse_log(log: &str) -> Vec<Diagnostic> {
     use regex::Regex;
@@ -306,10 +350,10 @@ l.99 \\end
         assert_eq!(d[5].line, Some(99));
     }
 
-    /// Runs only when a tectonic binary is reachable (FOLIO_TECTONIC or PATH).
+    /// Runs only when a tectonic binary is reachable (QUILLTEX_TECTONIC or PATH).
     #[test]
     fn compiles_with_tectonic() {
-        let bin = std::env::var_os("FOLIO_TECTONIC").map(PathBuf::from).or_else(|| {
+        let bin = std::env::var_os("QUILLTEX_TECTONIC").map(PathBuf::from).or_else(|| {
             let p = std::env::var_os("PATH")?;
             std::env::split_paths(&p).map(|d| d.join(exe("tectonic"))).find(|p| p.is_file())
         });
@@ -320,6 +364,25 @@ l.99 \\end
         let tc = Toolchain { tectonic: Some(bin), ..Default::default() };
         let r = compile(&ws, "p", &tc).unwrap();
         assert!(r.ok, "{}", r.log);
-        assert!(ws.root().join("p/.folio/build/main.synctex.gz").exists());
+        assert!(ws.root().join("p/.quilltex/build/main.synctex.gz").exists());
+    }
+
+    /// Downloads TeX Live on first run, so only when QUILLTEX_TEXLIVE names its folder.
+    #[test]
+    fn compiles_with_texlive_installing_packages() {
+        let Some(root) = std::env::var_os("QUILLTEX_TEXLIVE").map(PathBuf::from) else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(tmp.path()).unwrap();
+        std::fs::create_dir_all(ws.root().join("p")).unwrap();
+        std::fs::write(ws.root().join("p/.latexmkrc"), "$pdf_mode = 4;\n").unwrap();
+        // lipsum is not in the base install.
+        std::fs::write(
+            ws.root().join("p/main.tex"),
+            "\\documentclass{article}\\usepackage{lipsum}\\begin{document}\\lipsum[1]\\end{document}\n",
+        )
+        .unwrap();
+        let tc = Toolchain { texlive: Some(root), ..Default::default() };
+        let r = compile_with(&ws, "p", &tc, &|s| eprintln!("{s}")).unwrap();
+        assert!(r.ok, "{}", r.log);
     }
 }

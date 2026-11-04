@@ -16,12 +16,12 @@ impl Workspace {
         Ok(Self { root: root.canonicalize()? })
     }
 
-    /// `~/Documents/Folio`, falling back to `~/Folio`.
+    /// `~/Documents/QuillTex`, falling back to `~/QuillTex`.
     pub fn default_root() -> PathBuf {
         dirs::document_dir()
             .or_else(dirs::home_dir)
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("Folio")
+            .join("QuillTex")
     }
 
     pub fn root(&self) -> &Path {

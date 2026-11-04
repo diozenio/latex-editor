@@ -237,7 +237,7 @@ pub fn status(ws: &Workspace, project: &str) -> Result<RepoStatus> {
             files.push(FileStatus { path: f[9].into(), kind: "conflicted".into(), staged: false, unstaged: true });
         }
     }
-    files.retain(|f| !f.path.starts_with(".folio/build"));
+    files.retain(|f| !f.path.starts_with(".quilltex/build"));
 
     let remote_url = git.line(&["config", "--get", "remote.origin.url"]);
     if let (Some(b), None) = (&branch, &upstream) {
@@ -342,10 +342,10 @@ fn conflicted(git: &Git) -> Vec<String> {
 fn identity_args(git: &Git) -> Vec<&'static str> {
     let mut args = Vec::new();
     if git.line(&["config", "user.name"]).is_none() {
-        args.extend(["-c", "user.name=Folio"]);
+        args.extend(["-c", "user.name=QuillTex"]);
     }
     if git.line(&["config", "user.email"]).is_none() {
-        args.extend(["-c", "user.email=folio@localhost"]);
+        args.extend(["-c", "user.email=quilltex@localhost"]);
     }
     args
 }

@@ -1,4 +1,4 @@
-//! The user's own GitHub CLI (`gh`). Folio stores no tokens: whatever
+//! The user's own GitHub CLI (`gh`). QuillTex stores no tokens: whatever
 //! `gh auth login` set up on this machine is what we use.
 
 use std::path::PathBuf;

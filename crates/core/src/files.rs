@@ -31,7 +31,7 @@ fn walk(dir: &Path, root: &Path) -> Result<Vec<FileNode>> {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
         // Hide internals and dotfiles except .gitignore / .latexmkrc.
-        if is_internal(&path, root) || name == ".folio" || name == ".DS_Store" {
+        if is_internal(&path, root) || name == ".quilltex" || name == ".DS_Store" {
             continue;
         }
         if name.starts_with('.') && !matches!(name.as_str(), ".gitignore" | ".latexmkrc") {
@@ -86,7 +86,7 @@ pub fn write_bytes(ws: &Workspace, project: &str, rel: &str, content: &[u8]) -> 
     // Write to a sibling temp file then rename, so editors and the watcher
     // never observe a half-written file.
     let tmp = p.with_extension(format!(
-        "{}.folio-tmp",
+        "{}.quilltex-tmp",
         p.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default()
     ));
     std::fs::write(&tmp, content)?;
@@ -182,7 +182,7 @@ mod tests {
         rename(&ws, "p", "sections/intro.tex", "sections/a.tex").unwrap();
         let t = tree(&ws, "p").unwrap();
         assert_eq!(t[0].name, "sections");
-        assert!(t.iter().all(|n| n.name != ".folio"));
+        assert!(t.iter().all(|n| n.name != ".quilltex"));
         assert!(write_text(&ws, "p", "../q/x.tex", "").is_err());
         assert!(write_text(&ws, "gone", "main.tex", "").is_err());
         assert!(!tmp.path().join("gone").exists());

@@ -128,8 +128,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let ws = Workspace::new(tmp.path().join("ws")).unwrap();
         project::create(&ws, "src", "report").unwrap();
-        std::fs::create_dir_all(ws.root().join("src/.folio/build")).unwrap();
-        std::fs::write(ws.root().join("src/.folio/build/main.pdf"), "x").unwrap();
+        std::fs::create_dir_all(ws.root().join("src/.quilltex/build")).unwrap();
+        std::fs::write(ws.root().join("src/.quilltex/build/main.pdf"), "x").unwrap();
         let z = tmp.path().join("out.zip");
         export_zip(&ws, "src", &z, false).unwrap();
 

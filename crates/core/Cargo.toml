@@ -1,5 +1,5 @@
 [package]
-name = "folio-core"
+name = "quilltex-core"
 version.workspace = true
 edition.workspace = true
 
@@ -16,6 +16,7 @@ chrono = { version = "0.4", features = ["serde"] }
 flate2 = "1"
 wait-timeout = "0.2"
 uuid = { version = "1", features = ["v4"] }
+ureq = "3"
 
 [dev-dependencies]
 tempfile = "3"
