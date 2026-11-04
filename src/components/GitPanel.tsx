@@ -16,12 +16,14 @@ import {
   Trash2,
   AlertTriangle,
   FileDiff,
+  MoreHorizontal,
 } from "lucide-react";
 import { api, type Branch, type Commit, type FileStatus, type MergeOutcome } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
 import { basename, mod, timeAgo } from "@/lib/format";
-import { Dropdown, type MenuEntry } from "./ui/Menu";
+import { ContextMenu, Dropdown, type MenuEntry } from "./ui/Menu";
+import { commitMenu } from "./commitMenu";
 import { SyncBadge } from "./SyncBadge";
 
 export function describeMerge(o: MergeOutcome): string {
@@ -114,6 +116,22 @@ export function GitPanel() {
       label: b.name,
       icon: <GitBranch size={14} />,
       right: b.isHead ? <Check size={13} /> : undefined,
+      action: b.isHead
+        ? undefined
+        : {
+            icon: <Trash2 size={13} />,
+            label: `Delete ${b.name}`,
+            danger: true,
+            onClick: () =>
+              app.openDialog({
+                kind: "confirm",
+                title: `Delete branch “${b.name}”?`,
+                message: "Commits that only exist on this branch will no longer be reachable.",
+                danger: true,
+                confirm: "Delete",
+                onConfirm: () => act("delete", () => api.gitDeleteBranch(name, b.name)),
+              }),
+          },
       onSelect: () => !b.isHead && act("checkout", () => api.gitCheckout(name, b.name), `Switched to ${b.name}`),
     })),
     ...(remote.length ? [{ heading: "Remote" } as MenuEntry] : []),
@@ -136,23 +154,6 @@ export function GitPanel() {
         }),
     },
     { label: "Merge into current…", icon: <GitMerge size={14} />, onSelect: () => app.openDialog({ kind: "merge", project: name }) },
-    ...(local.filter((b) => !b.isHead).length ? [{ separator: true } as MenuEntry] : []),
-    ...local
-      .filter((b) => !b.isHead)
-      .map((b) => ({
-        label: `Delete ${b.name}`,
-        icon: <Trash2 size={14} />,
-        danger: true,
-        onSelect: () =>
-          app.openDialog({
-            kind: "confirm",
-            title: `Delete branch “${b.name}”?`,
-            message: "Commits that only exist on this branch will no longer be reachable.",
-            danger: true,
-            confirm: "Delete",
-            onConfirm: () => act("delete", () => api.gitDeleteBranch(name, b.name)),
-          }),
-      })),
   ];
 
   return (
@@ -317,13 +318,33 @@ export function GitPanel() {
         <span>History</span>
       </div>
       <div>
-        {log.slice(0, 40).map((c) => (
-          <div key={c.id} className="commit-row" title={`${c.id}\n${c.author}`}>
-            <span className="summary">{c.summary}</span>
-            <span className="meta">
-              <span className="mono">{c.short}</span> · {c.author} · {timeAgo(c.time)}
-            </span>
-          </div>
+        {log.slice(0, 40).map((c, i) => (
+          <ContextMenu key={c.id} items={commitMenu(name, c, i === 0)}>
+            <div
+              className="commit-row"
+              style={{ "--i": Math.min(i, 12) } as React.CSSProperties}
+              title={`${c.id}\n${c.author}`}
+              onClick={() => app.openDialog({ kind: "commit", project: name, commit: c })}
+            >
+              <div className="top">
+                <span className="summary">{c.summary}</span>
+                <span className="acts" onClick={(e) => e.stopPropagation()}>
+                  <Dropdown
+                    align="end"
+                    items={commitMenu(name, c, i === 0)}
+                    trigger={
+                      <button className="icon-btn sm" title="Actions">
+                        <MoreHorizontal size={13} />
+                      </button>
+                    }
+                  />
+                </span>
+              </div>
+              <span className="meta">
+                <span className="mono">{c.short}</span> · {c.author} · {timeAgo(c.time)}
+              </span>
+            </div>
+          </ContextMenu>
         ))}
         {!log.length && <div className="muted" style={{ padding: "4px 8px" }}>No commits yet</div>}
       </div>

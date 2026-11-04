@@ -8,17 +8,20 @@ import {
   Loader2,
   Lock,
   Mail,
+  MoreHorizontal,
   Presentation,
   ScrollText,
   Search,
   UserSquare,
   Square,
 } from "lucide-react";
-import { api, errorMessage, type Branch, type Engine, type Repo } from "@/lib/ipc";
+import { api, errorMessage, type Branch, type Commit, type CommitFile, type Engine, type Repo } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
 import { slug, timeAgo } from "@/lib/format";
 import { Dialog } from "./ui/Dialog";
+import { Dropdown } from "./ui/Menu";
+import { commitMenu } from "./commitMenu";
 import { describeMerge } from "./GitPanel";
 
 export function Dialogs() {
@@ -36,6 +39,8 @@ export function Dialogs() {
       return <Uninstall onClose={close} />;
     case "diff":
       return <Diff project={dialog.project} path={dialog.path} onClose={close} />;
+    case "commit":
+      return <CommitDetails project={dialog.project} commit={dialog.commit} onClose={close} />;
     case "merge":
       return <Merge project={dialog.project} onClose={close} />;
     case "project-settings":
@@ -270,8 +275,11 @@ function Publish({ project, onClose }: { project: string; onClose: () => void })
   const submit = () =>
     run(async () => {
       const status = await api.gitStatus(project);
-      if (!status.isRepo) await api.gitInit(project);
-      else if (status.files.length) {
+      if (!status.isRepo) {
+        await api.gitInit(project);
+        await api.gitStageAll(project);
+        await api.gitCommit(project, "Initial commit");
+      } else if (status.files.length) {
         await api.gitStageAll(project);
         await api.gitCommit(project, "Update before publishing");
       }
@@ -406,24 +414,104 @@ function Diff({ project, path, onClose }: { project: string; path: string; onClo
         </>
       }
     >
-      <div className="diff">
-        {diff === null ? (
-          <div className="muted">Loading…</div>
-        ) : !diff.trim() ? (
-          <div className="muted">No textual changes.</div>
-        ) : (
-          diff.split("\n").map((l, i) => (
-            <div
-              key={i}
-              className={
-                l.startsWith("@@") ? "hunk" : l.startsWith("+") && !l.startsWith("+++") ? "add" : l.startsWith("-") && !l.startsWith("---") ? "del" : ""
-              }
-            >
-              {l || " "}
+      <DiffLines diff={diff} />
+    </Dialog>
+  );
+}
+
+function DiffLines({ diff }: { diff: string | null }) {
+  return (
+    <div className="diff">
+      {diff === null ? (
+        <div className="muted">Loading…</div>
+      ) : !diff.trim() ? (
+        <div className="muted">No textual changes.</div>
+      ) : (
+        diff.split("\n").map((l, i) => (
+          <div
+            key={i}
+            className={
+              l.startsWith("@@") ? "hunk" : l.startsWith("+") && !l.startsWith("+++") ? "add" : l.startsWith("-") && !l.startsWith("---") ? "del" : ""
+            }
+          >
+            {l || " "}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function CommitDetails({ project, commit, onClose }: { project: string; commit: Commit; onClose: () => void }) {
+  const [files, setFiles] = useState<CommitFile[] | null>(null);
+  const [path, setPath] = useState<string | null>(null);
+  const [diff, setDiff] = useState<string | null>(null);
+  const [head, setHead] = useState(false);
+
+  useEffect(() => {
+    api.gitLog(project).then((l) => setHead(l[0]?.id === commit.id)).catch(() => {});
+    api
+      .gitCommitFiles(project, commit.id)
+      .then((f) => {
+        setFiles(f);
+        setPath(f[0]?.path ?? null);
+      })
+      .catch(() => setFiles([]));
+  }, [project, commit.id]);
+
+  useEffect(() => {
+    if (!path) return;
+    setDiff(null);
+    api.gitCommitDiff(project, commit.id, path).then(setDiff).catch((e) => setDiff(errorMessage(e)));
+  }, [project, commit.id, path]);
+
+  return (
+    <Dialog
+      open
+      wide
+      tall
+      onClose={onClose}
+      title={commit.summary}
+      description={`${commit.short} · ${commit.author} · ${timeAgo(commit.time)}`}
+      corner={
+        <Dropdown
+          align="end"
+          items={commitMenu(project, commit, head, false)}
+          trigger={
+            <button className="icon-btn" title="Actions">
+              <MoreHorizontal size={16} />
+            </button>
+          }
+        />
+      }
+    >
+      {files === null ? (
+        <div className="muted">Loading…</div>
+      ) : (
+        <>
+          <div className="commit-files">
+            {files.map((f, i) => (
+              <div
+                key={f.path}
+                className={`git-file${f.path === path ? " active" : ""}`}
+                style={{ "--i": Math.min(i, 10) } as React.CSSProperties}
+                onClick={() => setPath(f.path)}
+              >
+                <span className={`kind ${f.kind}`}>{{ new: "A", modified: "M", deleted: "D", typechange: "T" }[f.kind]}</span>
+                <span className="name" title={f.path}>
+                  &lrm;{f.path}
+                </span>
+              </div>
+            ))}
+            {!files.length && <div className="muted">No file changes.</div>}
+          </div>
+          {path && (
+            <div className="commit-diff">
+              <DiffLines key={path} diff={diff} />
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </>
+      )}
     </Dialog>
   );
 }
