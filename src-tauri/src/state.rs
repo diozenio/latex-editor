@@ -4,7 +4,7 @@ use std::sync::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use folio_core::{compile::Toolchain, Workspace};
+use quilltex_core::{compile::Toolchain, Workspace};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -80,7 +80,7 @@ impl AppState {
         let toolchain = Toolchain {
             tectonic: Some(bin_dir.join(exe("tectonic"))).filter(|p| p.is_file()),
             tectonic_cache: Some(cache_dir.join("tectonic")),
-            system_tex_bin: folio_core::compile::detect_system_tex(),
+            texlive: Some(texlive_dir(app)?),
         };
         Ok(Self {
             ws: RwLock::new(ws),
@@ -106,10 +106,10 @@ impl AppState {
     }
 
     pub fn mcp_binary(&self) -> PathBuf {
-        self.bin_dir.join(exe("folio-mcp"))
+        self.bin_dir.join(exe("quilltex-mcp"))
     }
 
-    /// Arguments for launching folio-mcp against the current workspace.
+    /// Arguments for launching quilltex-mcp against the current workspace.
     pub fn mcp_args(&self) -> Vec<String> {
         let tc = self.toolchain.read().unwrap();
         let mut args = vec!["--root".into(), self.ws().root().display().to_string()];
@@ -119,8 +119,24 @@ impl AppState {
         if let Some(c) = &tc.tectonic_cache {
             args.extend(["--tectonic-cache".into(), c.display().to_string()]);
         }
+        if let Some(t) = &tc.texlive {
+            args.extend(["--texlive".into(), t.display().to_string()]);
+        }
         args
     }
+}
+
+/// Where the private TeX Live goes. TeX Live breaks on Windows paths with spaces
+/// or non-ASCII characters (common in user names), so those fall back to ProgramData.
+fn texlive_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
+    let dir = app.path().app_local_data_dir()?.join("texlive");
+    #[cfg(windows)]
+    if !dir.to_string_lossy().chars().all(|c| c.is_ascii_graphic() || c == '\\' || c == ':') {
+        if let Some(pd) = std::env::var_os("ProgramData") {
+            return Ok(PathBuf::from(pd).join(&app.config().identifier).join("texlive"));
+        }
+    }
+    Ok(dir)
 }
 
 pub fn exe(name: &str) -> String {

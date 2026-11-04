@@ -1,5 +1,5 @@
 //! The side chat drives the user's installed Claude Code CLI in headless
-//! mode. It only gets Folio's MCP tools: built-in file/shell tools are
+//! mode. It only gets QuillTex's MCP tools: built-in file/shell tools are
 //! disabled and it runs from a neutral folder, so it can touch projects but
 //! nothing else (including this app's own source).
 
@@ -43,7 +43,7 @@ pub(crate) fn claude_bin(state: &AppState) -> CmdResult<std::path::PathBuf> {
 fn write_mcp_config(state: &AppState) -> CmdResult<std::path::PathBuf> {
     let cfg = json!({
         "mcpServers": {
-            "folio": { "command": state.mcp_binary(), "args": state.mcp_args() }
+            "quilltex": { "command": state.mcp_binary(), "args": state.mcp_args() }
         }
     });
     let path = state.config_dir.join("mcp.json");
@@ -63,14 +63,14 @@ pub fn chat_send(
 ) -> CmdResult<()> {
     let bin = claude_bin(&state)?;
     if !state.mcp_binary().is_file() {
-        return Err("folio-mcp sidecar is missing; run `npm run sidecars`.".into());
+        return Err("quilltex-mcp sidecar is missing; run `npm run sidecars`.".into());
     }
     let mcp = write_mcp_config(&state)?;
     let cwd = state.config_dir.join("chat-workspace");
     std::fs::create_dir_all(&cwd).map_err(|e| e.to_string())?;
 
     let system = format!(
-        "You are the assistant inside Folio, a local LaTeX editor. You can ONLY act through the `folio` MCP tools \
+        "You are the assistant inside QuillTex, a local LaTeX editor. You can ONLY act through the `quilltex` MCP tools \
          (projects live in {}). Keep answers short. After editing .tex files, compile and fix errors you introduced. \
          Current context:\n{context}",
         state.ws().root().display()
@@ -79,7 +79,7 @@ pub fn chat_send(
     cmd.args(["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"])
         .arg("--mcp-config")
         .arg(&mcp)
-        .args(["--strict-mcp-config", "--disable-slash-commands", "--allowedTools", "mcp__folio", "--disallowedTools", DISALLOWED])
+        .args(["--strict-mcp-config", "--disable-slash-commands", "--allowedTools", "mcp__quilltex", "--disallowedTools", DISALLOWED])
         .arg("--append-system-prompt")
         .arg(system);
     let model = state.settings().chat_model;
@@ -178,14 +178,14 @@ fn run_claude(state: &AppState, args: &[String]) -> CmdResult<String> {
 
 pub fn register_mcp(state: &AppState) -> CmdResult<()> {
     let _ = unregister_mcp(state);
-    let mut args: Vec<String> = ["mcp", "add", "folio", "--scope", "user", "--"].map(String::from).to_vec();
+    let mut args: Vec<String> = ["mcp", "add", "quilltex", "--scope", "user", "--"].map(String::from).to_vec();
     args.push(state.mcp_binary().display().to_string());
     args.extend(state.mcp_args());
     run_claude(state, &args).map(|_| ())
 }
 
 pub fn unregister_mcp(state: &AppState) -> CmdResult<()> {
-    run_claude(state, &["mcp", "remove", "folio", "--scope", "user"].map(String::from)).map(|_| ())
+    run_claude(state, &["mcp", "remove", "quilltex", "--scope", "user"].map(String::from)).map(|_| ())
 }
 
 #[tauri::command]

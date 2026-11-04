@@ -50,8 +50,8 @@ pub fn restart(app: &AppHandle) {
                     let rest: Vec<String> = comps.collect();
                     let rel_path = rest.join("/");
                     let internal = rel_path.starts_with(".git/")
-                        || rel_path.starts_with(".folio/build")
-                        || rel_path.ends_with(".folio-tmp");
+                        || rel_path.starts_with(".quilltex/build")
+                        || rel_path.ends_with(".quilltex-tmp");
                     // Git ref changes matter for the sync badge; mark them specially.
                     if rel_path.starts_with(".git/") {
                         if rel_path == ".git/HEAD" || rel_path.starts_with(".git/refs") || rel_path == ".git/index" {

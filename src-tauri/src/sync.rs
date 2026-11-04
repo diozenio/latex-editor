@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use folio_core::{git, project, Workspace};
+use quilltex_core::{git, project, Workspace};
 
 use crate::state::AppState;
 

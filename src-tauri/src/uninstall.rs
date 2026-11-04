@@ -1,5 +1,5 @@
 //! In-app uninstall (macOS/Linux; Windows uses the NSIS uninstaller, which
-//! we launch). Removes everything Folio created outside the projects
+//! we launch). Removes everything QuillTex created outside the projects
 //! folder, and the projects too if asked. GitHub sign-in belongs to the
 //! user's GitHub CLI and is left alone.
 
@@ -26,7 +26,7 @@ pub fn run(app: &AppHandle, state: &AppState, delete_projects: bool) -> anyhow::
     if delete_projects {
         let root = state.ws().root().to_path_buf();
         if root.exists() {
-            folio_core::trash::delete(&root).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+            quilltex_core::trash::delete(&root).map_err(|e| anyhow::anyhow!(e.to_string()))?;
         }
     }
     let paths = app.path();
@@ -48,15 +48,15 @@ pub fn run(app: &AppHandle, state: &AppState, delete_projects: bool) -> anyhow::
 
     #[cfg(target_os = "macos")]
     {
-        // .../Folio.app/Contents/MacOS/folio → move Folio.app to the Trash.
+        // .../QuillTex.app/Contents/MacOS/quilltex → move QuillTex.app to the Trash.
         let exe = std::env::current_exe()?;
         if let Some(bundle) = exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app")) {
-            folio_core::trash::delete(bundle).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+            quilltex_core::trash::delete(bundle).map_err(|e| anyhow::anyhow!(e.to_string()))?;
         }
         app.exit(0);
-        return Ok("Folio was moved to the Trash".into());
+        return Ok("QuillTex was moved to the Trash".into());
     }
 
     #[allow(unreachable_code)]
-    Ok("App data removed. Finish by removing the package, e.g. `sudo apt remove folio` or deleting the AppImage.".into())
+    Ok("App data removed. Finish by removing the package, e.g. `sudo apt remove quilltex` or deleting the AppImage.".into())
 }

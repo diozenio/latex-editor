@@ -1,13 +1,14 @@
-//! IPC surface. Thin wrappers over folio-core; anything slow runs on the
+//! IPC surface. Thin wrappers over quilltex-core; anything slow runs on the
 //! blocking pool so the UI never stalls.
 
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tauri::{ipc::Response, AppHandle, Manager, State};
+use tauri::{ipc::Response, AppHandle, Emitter, Manager, State};
 
-use folio_core::{
+use quilltex_core::{
     archive, compile, files, gh, git, project,
+    texlive,
     synctex::{PdfSpot, SourceSpot, SyncTex},
     templates,
 };
@@ -33,7 +34,8 @@ pub struct AppInfo {
     platform: String,
     projects_root: String,
     tectonic: bool,
-    system_tex: Option<String>,
+    /// The private TeX Live is downloaded and ready.
+    texlive: bool,
     claude: Option<String>,
     gh_installed: bool,
     github_connected: bool,
@@ -48,7 +50,7 @@ pub fn app_info(app: AppHandle, state: State<AppState>) -> AppInfo {
         platform: std::env::consts::OS.into(),
         projects_root: state.ws().root().display().to_string(),
         tectonic: tc.tectonic.is_some(),
-        system_tex: tc.system_tex_bin.map(|p| p.display().to_string()),
+        texlive: tc.texlive.as_deref().is_some_and(texlive::is_installed),
         claude: crate::env::find_claude(&s.claude_path).map(|p| p.display().to_string()),
         gh_installed: gh::find().is_some(),
         github_connected: gh::logged_in(),
@@ -64,7 +66,7 @@ pub fn get_settings(state: State<AppState>) -> Settings {
 pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings) -> CmdResult<Settings> {
     let old = state.settings();
     if old.projects_root != settings.projects_root {
-        let ws = folio_core::Workspace::new(&settings.projects_root).map_err(err)?;
+        let ws = quilltex_core::Workspace::new(&settings.projects_root).map_err(err)?;
         *state.ws.write().unwrap() = ws;
         crate::watcher::restart(&app);
     }
@@ -204,10 +206,36 @@ pub fn import_files(state: State<AppState>, project: String, paths: Vec<String>,
 // ---------- compile ----------
 
 #[tauri::command]
-pub async fn compile_project(state: State<'_, AppState>, project: String) -> CmdResult<compile::CompileResult> {
+pub async fn compile_project(app: AppHandle, state: State<'_, AppState>, project: String) -> CmdResult<compile::CompileResult> {
     let ws = state.ws();
     let tc = state.toolchain.read().unwrap().clone();
-    blocking(move || compile::compile(&ws, &project, &tc).map_err(err)).await
+    blocking(move || {
+        // Slow steps (setting up TeX Live, installing packages) show in the status bar.
+        let status = |message: &str| {
+            let _ = app.emit("compile-status", serde_json::json!({ "project": project, "message": message }));
+        };
+        compile::compile_with(&ws, &project, &tc, &status).map_err(err)
+    })
+    .await
+}
+
+/// Download TeX Live ahead of the first compile that needs it.
+#[tauri::command]
+pub async fn install_texlive(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    let root = state.toolchain.read().unwrap().texlive.clone().ok_or("TeX Live is not available")?;
+    blocking(move || {
+        let status = |message: &str| {
+            let _ = app.emit("texlive-status", message);
+        };
+        texlive::install(&root, &status).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_texlive(state: State<'_, AppState>) -> CmdResult<()> {
+    let root = state.toolchain.read().unwrap().texlive.clone().ok_or("TeX Live is not available")?;
+    blocking(move || texlive::remove(&root).map_err(err)).await
 }
 
 #[tauri::command]

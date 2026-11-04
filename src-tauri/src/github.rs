@@ -1,4 +1,4 @@
-//! GitHub through the user's own GitHub CLI (`gh`). Folio stores no token:
+//! GitHub through the user's own GitHub CLI (`gh`). QuillTex stores no token:
 //! signing in runs `gh auth login --web`, which keeps it in gh's store.
 
 use std::io::{BufRead, BufReader};
@@ -10,7 +10,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, State};
 
-use folio_core::{gh, git};
+use quilltex_core::{gh, git};
 
 use crate::commands::CmdResult;
 use crate::state::{AppState, GithubUser};

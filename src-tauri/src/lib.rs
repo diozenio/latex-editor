@@ -14,12 +14,12 @@ use tauri::{Emitter, Manager};
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
-    let app_menu = Submenu::with_items(app, "Folio", true, &[
-        &PredefinedMenuItem::about(app, Some("About Folio"), Some(AboutMetadata::default()))?,
+    let app_menu = Submenu::with_items(app, "QuillTex", true, &[
+        &PredefinedMenuItem::about(app, Some("About QuillTex"), Some(AboutMetadata::default()))?,
         &PredefinedMenuItem::separator(app)?,
         &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
         &PredefinedMenuItem::separator(app)?,
-        &item("uninstall", "Uninstall Folio…", None)?,
+        &item("uninstall", "Uninstall QuillTex…", None)?,
         &PredefinedMenuItem::separator(app)?,
         &PredefinedMenuItem::hide(app, None)?,
         &PredefinedMenuItem::hide_others(app, None)?,
@@ -72,6 +72,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(watcher::WatcherHolder::default())
         .manage(chat::ChatProcesses::default())
         .setup(|app| {
@@ -134,6 +136,8 @@ pub fn run() {
             commands::delete_path,
             commands::import_files,
             commands::compile_project,
+            commands::install_texlive,
+            commands::remove_texlive,
             commands::clean_build,
             commands::save_pdf_as,
             commands::synctex_forward,
@@ -182,5 +186,5 @@ pub fn run() {
             chat::mcp_unregister,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Folio");
+        .expect("error while running QuillTex");
 }

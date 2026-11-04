@@ -2,7 +2,7 @@
 //! utilization fraction (in its `rate_limit_event`) but never a token limit,
 //! so the limit shown is estimated: tokens spent in the window / utilization.
 //! Spent tokens come from Claude Code's own transcripts; the ones written by
-//! Folio's chat (run from `chat-workspace`) are Folio's share.
+//! QuillTex's chat (run from `chat-workspace`) are QuillTex's share.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -35,7 +35,7 @@ pub struct WindowUsage {
     utilization: f64,
     resets_at: i64,
     total_tokens: u64,
-    folio_tokens: u64,
+    quilltex_tokens: u64,
     /// Not reported by Claude Code; derived from `total_tokens / utilization`.
     estimated_limit: Option<u64>,
 }
@@ -70,7 +70,7 @@ fn cached(state: &AppState) -> Option<Vec<Limit>> {
 }
 
 /// One tiny request, from a neutral folder and without a saved session, so
-/// it neither counts as Folio's usage nor clutters the user's history.
+/// it neither counts as QuillTex's usage nor clutters the user's history.
 fn probe(state: &AppState) -> CmdResult<Vec<Limit>> {
     let bin = crate::chat::claude_bin(state)?;
     let out = Command::new(bin)
@@ -118,15 +118,15 @@ fn billed(usage: &Value) -> u64 {
     ["input_tokens", "output_tokens", "cache_creation_input_tokens"].iter().filter_map(|k| usage[*k].as_u64()).sum()
 }
 
-/// (total, folio) tokens spent at or after `since`, de-duplicating the
+/// (total, quilltex) tokens spent at or after `since`, de-duplicating the
 /// repeated lines Claude Code writes for one streamed message.
-fn spent(home: &Path, folio_dir: &str, since: i64) -> (u64, u64) {
+fn spent(home: &Path, quilltex_dir: &str, since: i64) -> (u64, u64) {
     let cutoff = std::time::UNIX_EPOCH + std::time::Duration::from_secs(since.max(0) as u64);
     let mut files = Vec::new();
     jsonl_files(&home.join("projects"), cutoff, &mut files);
     let mut seen: HashMap<String, (u64, bool)> = HashMap::new();
     for f in files {
-        let is_folio = f.strip_prefix(home.join("projects")).ok().and_then(|p| p.components().next()).is_some_and(|c| c.as_os_str() == folio_dir);
+        let is_quilltex = f.strip_prefix(home.join("projects")).ok().and_then(|p| p.components().next()).is_some_and(|c| c.as_os_str() == quilltex_dir);
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         for line in text.lines() {
             if !line.contains("\"usage\"") {
@@ -140,26 +140,26 @@ fn spent(home: &Path, folio_dir: &str, since: i64) -> (u64, u64) {
             let key = format!("{}:{}", v["message"]["id"].as_str().unwrap_or(""), v["requestId"].as_str().unwrap_or(""));
             let n = billed(&v["message"]["usage"]);
             if key.len() > 1 {
-                seen.insert(key, (n, is_folio));
+                seen.insert(key, (n, is_quilltex));
             } else {
-                seen.insert(format!("{}:{}", f.display(), v["uuid"]), (n, is_folio));
+                seen.insert(format!("{}:{}", f.display(), v["uuid"]), (n, is_quilltex));
             }
         }
     }
-    seen.values().fold((0, 0), |(t, f), (n, folio)| (t + n, f + if *folio { *n } else { 0 }))
+    seen.values().fold((0, 0), |(t, f), (n, quilltex)| (t + n, f + if *quilltex { *n } else { 0 }))
 }
 
 fn compute(state: &AppState, limits: Vec<Limit>) -> CmdResult<Vec<WindowUsage>> {
     let home = dirs::home_dir().ok_or("no home directory")?.join(".claude");
     let cwd = state.config_dir.join("chat-workspace");
-    let folio_dir = transcript_dir_name(&cwd.canonicalize().unwrap_or(cwd));
+    let quilltex_dir = transcript_dir_name(&cwd.canonicalize().unwrap_or(cwd));
     Ok(limits
         .into_iter()
         .map(|l| {
             let secs = WINDOWS.iter().find(|(k, _)| *k == l.kind).map_or(0, |(_, s)| *s);
-            let (total, folio) = spent(&home, &folio_dir, l.resets_at - secs);
+            let (total, quilltex) = spent(&home, &quilltex_dir, l.resets_at - secs);
             let estimated_limit = (l.utilization > 0.0 && total > 0).then(|| (total as f64 / l.utilization).round() as u64);
-            WindowUsage { kind: l.kind, utilization: l.utilization, resets_at: l.resets_at, total_tokens: total, folio_tokens: folio, estimated_limit }
+            WindowUsage { kind: l.kind, utilization: l.utilization, resets_at: l.resets_at, total_tokens: total, quilltex_tokens: quilltex, estimated_limit }
         })
         .collect())
 }
@@ -191,8 +191,8 @@ mod tests {
 
     #[test]
     fn transcript_dir_matches_claude_code_naming() {
-        let p = Path::new("/Users/x/Library/Application Support/dev.folio.app/chat-workspace");
-        assert_eq!(transcript_dir_name(p), "-Users-x-Library-Application-Support-dev-folio-app-chat-workspace");
+        let p = Path::new("/Users/x/Library/Application Support/dev.quilltex.app/chat-workspace");
+        assert_eq!(transcript_dir_name(p), "-Users-x-Library-Application-Support-dev-quilltex-app-chat-workspace");
     }
 
     #[test]
@@ -203,14 +203,14 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let proj = tmp.path().join("projects");
-        std::fs::create_dir_all(proj.join("folio")).unwrap();
+        std::fs::create_dir_all(proj.join("quilltex")).unwrap();
         std::fs::create_dir_all(proj.join("other")).unwrap();
         let line = |id: &str, out: u64| {
             format!(r#"{{"timestamp":"2030-01-01T00:00:00Z","requestId":"r{id}","message":{{"id":"m{id}","usage":{{"input_tokens":10,"output_tokens":{out},"cache_creation_input_tokens":0,"cache_read_input_tokens":999}}}}}}"#)
         };
-        std::fs::write(proj.join("folio/a.jsonl"), format!("{}\n{}\n", line("1", 5), line("1", 20))).unwrap();
+        std::fs::write(proj.join("quilltex/a.jsonl"), format!("{}\n{}\n", line("1", 5), line("1", 20))).unwrap();
         std::fs::write(proj.join("other/b.jsonl"), line("2", 40) + "\n").unwrap();
-        let (total, folio) = spent(tmp.path(), "folio", 0);
-        assert_eq!((total, folio), (30 + 50, 30));
+        let (total, quilltex) = spent(tmp.path(), "quilltex", 0);
+        assert_eq!((total, quilltex), (30 + 50, 30));
     }
 }

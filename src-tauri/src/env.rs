@@ -9,13 +9,13 @@ pub fn fix_path() {
     {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
         let out = std::process::Command::new(shell)
-            .args(["-ilc", "printf '__FOLIO_PATH__%s' \"$PATH\""])
+            .args(["-ilc", "printf '__QUILLTEX_PATH__%s' \"$PATH\""])
             .stdin(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .output();
         if let Ok(out) = out {
             let text = String::from_utf8_lossy(&out.stdout);
-            if let Some(path) = text.split("__FOLIO_PATH__").nth(1) {
+            if let Some(path) = text.split("__QUILLTEX_PATH__").nth(1) {
                 let current = std::env::var("PATH").unwrap_or_default();
                 std::env::set_var("PATH", format!("{}:{current}", path.trim()));
             }
