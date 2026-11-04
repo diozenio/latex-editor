@@ -38,7 +38,7 @@ function runAction(id: string) {
       }
       return;
     case "save":
-      return proj.active && proj.save(proj.active);
+      return proj.commit();
     case "export-zip":
       return exportZipFlow();
     case "download-pdf":
