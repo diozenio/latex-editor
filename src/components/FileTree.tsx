@@ -216,6 +216,16 @@ export function FileTree() {
     window.addEventListener("keydown", onKey);
   };
 
+  // Rows currently on screen, in display order.
+  const visibleNodes = (nodes: FileNode[]): FileNode[] =>
+    nodes.flatMap((n) => (n.isDir && expanded.has(n.path) ? [n, ...visibleNodes(n.children ?? [])] : [n]));
+
+  const activate = (n: FileNode) => {
+    if (n.isDir) toggle(n.path);
+    // Opening a file focuses the editor; keep focus here so keyboard actions apply to the tree.
+    else void openFile(n.path).then(() => requestAnimationFrame(() => treeRef.current?.focus()));
+  };
+
   const confirmDelete = (node: FileNode) =>
     app.openDialog({
       kind: "confirm",
@@ -300,15 +310,14 @@ export function FileTree() {
             <div
               className={`tree-row${active === n.path ? " active" : ""}${focused === n.path ? " focused" : ""}${dropTarget === n.path ? " drop-target" : ""}${drag?.node.path === n.path ? " dragging" : ""}`}
               style={{ paddingLeft: 8 + depth * 14 }}
+              data-path={n.path}
               data-dir={n.isDir ? n.path : dirname(n.path)}
               data-folder={n.isDir && !open ? n.path : undefined}
               onMouseDown={(e) => !isEditing && beginDrag(e, n)}
               onClick={() => {
                 if (suppressClick.current) return;
                 setFocused(n.path);
-                if (n.isDir) toggle(n.path);
-                // Opening a file focuses the editor; keep focus here so keyboard actions apply to the tree.
-                else void openFile(n.path).then(() => requestAnimationFrame(() => treeRef.current?.focus()));
+                activate(n);
               }}
               onDoubleClick={() => {
                 if (!n.isDir) document.querySelector<HTMLElement>(".cm-content")?.focus();
@@ -355,13 +364,47 @@ export function FileTree() {
         data-dir=""
         tabIndex={-1}
         onKeyDown={(e) => {
-          if (editing || !focused || e.target !== e.currentTarget) return;
-          if (e.key === "Delete" || e.key === "Backspace") {
-            const node = findNode(tree, focused);
-            if (!node) return;
-            e.preventDefault();
-            confirmDelete(node);
+          if (editing || e.target !== e.currentTarget || e.metaKey || e.ctrlKey || e.altKey) return;
+          const rows = visibleNodes(tree);
+          const i = rows.findIndex((r) => r.path === focused);
+          const node = rows[i];
+          const go = (n: FileNode | undefined) => {
+            if (!n) return;
+            setFocused(n.path);
+            treeRef.current
+              ?.querySelector(`.tree-row[data-path="${CSS.escape(n.path)}"]`)
+              ?.scrollIntoView({ block: "nearest" });
+          };
+          switch (e.key) {
+            case "ArrowDown":
+              go(node ? rows[i + 1] : rows[0]);
+              break;
+            case "ArrowUp":
+              go(node ? rows[i - 1] : rows[rows.length - 1]);
+              break;
+            case "ArrowRight":
+              if (!node?.isDir) return;
+              if (!expanded.has(node.path)) toggle(node.path);
+              else go(node.children?.[0]);
+              break;
+            case "ArrowLeft":
+              if (!node) return;
+              if (node.isDir && expanded.has(node.path)) toggle(node.path);
+              else go(rows.find((r) => r.path === dirname(node.path)));
+              break;
+            case "Enter":
+              if (!node) return;
+              activate(node);
+              break;
+            case "Delete":
+            case "Backspace":
+              if (!node) return;
+              confirmDelete(node);
+              break;
+            default:
+              return;
           }
+          e.preventDefault();
         }}
         onClick={(e) => {
           // Clicking the empty area collapses the focused folder and resets creation to the root.

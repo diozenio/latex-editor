@@ -667,6 +667,9 @@ body.tree-dragging * {
 .tree-row.focused:not(.active) {
   box-shadow: inset 0 0 0 1px var(--border-strong);
 }
+.tree:focus .tree-row.focused {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .tree-row.dragging {
   opacity: 0.5;
 }
