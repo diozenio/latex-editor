@@ -54,9 +54,7 @@
     "typescript": "~5.6.3",
     "vite": "^6.0.0"
   },
-  "allowScripts": {
-    "esbuild@0.25.12": true
-  },
+  "packageManager": "pnpm@11.18.0",
   "config": {
     "commitizen": {
       "path": "cz-conventional-changelog"
