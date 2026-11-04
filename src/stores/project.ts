@@ -44,8 +44,11 @@ interface ProjectState {
   closeTab: (path: string) => void;
   setActive: (path: string) => void;
   edit: (path: string, content: string) => void;
+  /** Write to disk only. Runs on its own shortly after every keystroke. */
   save: (path: string) => Promise<void>;
   saveAll: () => Promise<void>;
+  /** ⌘S: flush every buffer, then compile if the project compiles automatically. */
+  commit: () => Promise<void>;
   compile: () => Promise<void>;
   scheduleCompile: () => void;
   onExternalChange: (paths: string[]) => Promise<void>;
@@ -57,6 +60,10 @@ interface ProjectState {
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Content each path is being written with, so the watcher doesn't mistake our own writes for outside edits. */
+const writing = new Map<string, string>();
+const writeChains = new Map<string, Promise<void>>();
+const AUTOSAVE_MS = 250;
 let compileTimer: ReturnType<typeof setTimeout> | undefined;
 let compileQueued = false;
 
@@ -182,30 +189,49 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   edit(path, content) {
     const doc = get().docs[path];
-    if (!doc) return;
+    if (!doc || doc.content === content) return;
     set({ docs: { ...get().docs, [path]: { ...doc, content } } });
     clearTimeout(saveTimers.get(path));
-    saveTimers.set(path, setTimeout(() => void get().save(path), 700));
+    saveTimers.set(path, setTimeout(() => void get().save(path), AUTOSAVE_MS));
   },
 
-  async save(path) {
-    const p = get().project;
-    const doc = get().docs[path];
-    if (!p || !doc || doc.content === doc.saved) return;
+  save(path) {
     clearTimeout(saveTimers.get(path));
-    const content = doc.content;
-    try {
-      await api.writeText(p.name, path, content);
-      const cur = get().docs[path];
-      if (cur) set({ docs: { ...get().docs, [path]: { ...cur, saved: content } } });
-      if (p.meta.autoCompile && /\.(tex|bib|cls|sty)$/i.test(path)) get().scheduleCompile();
-    } catch (e) {
-      useApp.getState().fail(e);
-    }
+    // Closing a tab or the project drops the doc right away; still write what it held.
+    const project = get().project;
+    const snapshot = get().docs[path];
+    // Writes to one path run one after another, so an older write never lands last.
+    const run = (writeChains.get(path) ?? Promise.resolve()).then(async () => {
+      const p = project;
+      const same = get().project?.name === p?.name;
+      const doc = (same && get().docs[path]) || snapshot;
+      if (!p || !doc || doc.content === doc.saved) return;
+      const content = doc.content;
+      writing.set(path, content);
+      try {
+        await api.writeText(p.name, path, content);
+        const cur = get().project?.name === p.name ? get().docs[path] : undefined;
+        if (cur) set({ docs: { ...get().docs, [path]: { ...cur, saved: content } } });
+      } catch (e) {
+        useApp.getState().fail(e);
+      } finally {
+        // Keep it a moment longer: the watcher reports the write ~150ms later.
+        setTimeout(() => writing.get(path) === content && writing.delete(path), 1000);
+      }
+    });
+    writeChains.set(path, run);
+    return run;
   },
 
   async saveAll() {
     await Promise.all(Object.keys(get().docs).map((p) => get().save(p)));
+  },
+
+  async commit() {
+    const p = get().project;
+    if (!p) return;
+    if (p.meta.autoCompile) await get().compile();
+    else await get().saveAll();
   },
 
   scheduleCompile() {
@@ -269,6 +295,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       } catch {
         continue; // deleted; leave the buffer so nothing is lost
       }
+      if (disk === writing.get(path)) continue; // our own autosave
       if (disk === doc.saved || disk === doc.content) {
         if (disk !== doc.saved) set({ docs: { ...get().docs, [path]: { ...doc, saved: disk } } });
         continue;
