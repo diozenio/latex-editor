@@ -21,15 +21,15 @@ A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync a
 ## Develop
 
 ```sh
-npm install
-npm run app:dev      # fetches Tectonic + builds quilltex-mcp, then `tauri dev`
+pnpm install
+pnpm app:dev         # fetches Tectonic + builds quilltex-mcp, then `tauri dev`
 cargo test -p quilltex-core -p quilltex-mcp
 ```
 
 ## Build installers
 
 ```sh
-npm run app:build    # .app/.dmg on macOS, NSIS .exe on Windows, .deb/.AppImage on Linux
+pnpm app:build      # .app/.dmg on macOS, NSIS .exe on Windows, .deb/.AppImage on Linux
 ```
 
 CI (`.github/workflows/release.yml`) builds all platforms when a release is created. Versions, changelog and tags are
