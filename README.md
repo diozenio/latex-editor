@@ -5,8 +5,9 @@ A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync a
 - **Projects are plain folders** in `~/Documents/QuillTex/<project>` (configurable). Open them in Finder or any editor.
   Per-project settings live in `.quilltex/project.json`; build output in `.quilltex/build/` (git-ignored).
 - **Compiles isolated** with a bundled [Tectonic](https://tectonic-typesetting.github.io), or with pdfLaTeX/XeLaTeX/LuaLaTeX
-  from QuillTex's own TeX Live ([TinyTeX](https://yihui.org/tinytex/), downloaded on first use into the app data dir).
-  Missing packages are installed on demand. Neither is ever put on your PATH, and a TeX installed on the computer is
+  from QuillTex's own TeX Live ([TinyTeX](https://yihui.org/tinytex/), shipped inside the app and unpacked into the app
+  data dir). Both come ready for the project templates, so new projects compile offline. Other packages are installed
+  on demand, in batches: what the sources name before the first run, then whatever a run still reports missing. Neither is ever put on your PATH, and a TeX installed on the computer is
   never used. Imported projects that bring a `.latexmkrc` compile with TeX Live the way Overleaf would.
 - **Overleaf basics**: new/template projects, import ZIP (drag a .zip onto the home screen), export ZIP, download PDF,
   file tree with drag & drop, logs with clickable errors, SyncTeX (⌘-click in editor or PDF), `\ref`/`\cite` completion.
@@ -22,7 +23,7 @@ A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync a
 
 ```sh
 pnpm install
-pnpm app:dev         # fetches Tectonic + builds quilltex-mcp, then `tauri dev`
+pnpm app:dev         # fetches Tectonic, builds quilltex-mcp, prepares the bundled engine files, then `tauri dev`
 cargo test -p quilltex-core -p quilltex-mcp
 ```
 
