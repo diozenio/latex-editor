@@ -13,21 +13,17 @@ Editor LaTeX local-first (Tauri 2 + React + Rust). Veja o `README.md` para a vis
 ## Comandos
 
 ```sh
-pnpm install                             # também instala os hooks do husky (script prepare)
+pnpm install
 pnpm app:dev                             # desenvolvimento (tauri dev)
 pnpm build                               # tsc + vite build
 cargo test -p quilltex-core -p quilltex-mcp
 pnpm exec biome check --write <arquivos> # formata e lint (Biome)
-pnpm commit                              # assistente de commit (commitizen)
 ```
 
 ## Commits e releases
 
-- Siga Conventional Commits; detalhes em `CONTRIBUTING.md`.
-- Escopos permitidos (validados pelo commitlint): `app`, `core`, `mcp`, `ui`, `chat`, `deps`, `scripts`, `release`, `readme`, `config`.
 - **Todo commit passa pela skill `staged-atomic-commits`** (`.claude/skills/`). Nunca rode `git commit` direto: o hook `.claude/hooks/require-commit-skill.sh` bloqueia commits sem o marcador da skill. Não adicione `Co-Authored-By` nem menção a IA.
-- Os hooks do husky (`.husky/`) rodam `lint-staged` (Biome) no pre-commit e `commitlint` no commit-msg. Nunca use `--no-verify`.
-- A versão é gerenciada pelo release-please a partir dos commits na `main`. Não edite a versão manualmente em `package.json`, `Cargo.toml`, `tauri.conf.json` nem os lockfiles, e não edite o `CHANGELOG.md` à mão.
+- Cada push na `main` gera uma release (`.github/workflows/release.yml`): builda as três plataformas e publica como latest. A versão é `major.minor` do `src-tauri/tauri.conf.json` mais o número do run como patch; para mudar major/minor, edite só o `tauri.conf.json`.
 
 ## Convenções de código
 
