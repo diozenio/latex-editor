@@ -1,0 +1,152 @@
+/* Design tokens: minimal, macOS-native, Linear-like. */
+
+:root {
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+
+  --titlebar-h: 52px;
+  --sidebar-w: 260px;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur: 140ms;
+
+  /* light */
+  --bg-window: rgba(246, 246, 248, 0.72);
+  --bg-sidebar: transparent;
+  --bg-content: #fbfbfc;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #f4f4f6;
+  --bg-hover: rgba(0, 0, 0, 0.045);
+  --bg-active: rgba(0, 0, 0, 0.075);
+  --bg-selected: rgba(59, 130, 246, 0.1);
+  --border: rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --text: #18181b;
+  --text-secondary: #52525b;
+  --text-tertiary: #8e8e96;
+  --text-quaternary: #b4b4bb;
+  --accent: #3b82f6;
+  --accent-hover: #2f74e8;
+  --accent-soft: rgba(59, 130, 246, 0.1);
+  --accent-text: #2563eb;
+  --ai-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --green: #16a34a;
+  --green-soft: rgba(22, 163, 74, 0.09);
+  --green-border: rgba(22, 163, 74, 0.25);
+  --orange: #ea580c;
+  --orange-soft: rgba(234, 88, 12, 0.08);
+  --orange-border: rgba(234, 88, 12, 0.25);
+  --red: #e5484d;
+  --red-soft: rgba(229, 72, 77, 0.08);
+  --red-border: rgba(229, 72, 77, 0.25);
+  --blue-border: rgba(59, 130, 246, 0.3);
+  --violet: #8b5cf6;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --overlay: rgba(10, 10, 12, 0.22);
+  --glow: transparent;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-window: rgba(28, 28, 31, 0.6);
+    --bg-content: #1c1c1f;
+    --bg-elevated: #242428;
+    --bg-sunken: #18181b;
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-active: rgba(255, 255, 255, 0.085);
+    --bg-selected: rgba(99, 140, 255, 0.16);
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --text: #ececef;
+    --text-secondary: #b4b4bc;
+    --text-tertiary: #84848d;
+    --text-quaternary: #5c5c64;
+    --accent: #5b8cff;
+    --accent-hover: #6f9bff;
+    --accent-soft: rgba(91, 140, 255, 0.14);
+    --accent-text: #8cb0ff;
+    --green: #3fbf6e;
+    --green-soft: rgba(63, 191, 110, 0.12);
+    --green-border: rgba(63, 191, 110, 0.3);
+    --orange: #f59e42;
+    --orange-soft: rgba(245, 158, 66, 0.12);
+    --orange-border: rgba(245, 158, 66, 0.3);
+    --red: #ff6369;
+    --red-soft: rgba(255, 99, 105, 0.12);
+    --red-border: rgba(255, 99, 105, 0.3);
+    --blue-border: rgba(91, 140, 255, 0.35);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --overlay: rgba(0, 0, 0, 0.45);
+    --glow: radial-gradient(600px 400px at 0% 40%, rgba(139, 92, 246, 0.16), transparent 70%);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-window: rgba(28, 28, 31, 0.6);
+  --bg-content: #1c1c1f;
+  --bg-elevated: #242428;
+  --bg-sunken: #18181b;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.085);
+  --bg-selected: rgba(99, 140, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #ececef;
+  --text-secondary: #b4b4bc;
+  --text-tertiary: #84848d;
+  --text-quaternary: #5c5c64;
+  --accent: #5b8cff;
+  --accent-hover: #6f9bff;
+  --accent-soft: rgba(91, 140, 255, 0.14);
+  --accent-text: #8cb0ff;
+  --green: #3fbf6e;
+  --green-soft: rgba(63, 191, 110, 0.12);
+  --green-border: rgba(63, 191, 110, 0.3);
+  --orange: #f59e42;
+  --orange-soft: rgba(245, 158, 66, 0.12);
+  --orange-border: rgba(245, 158, 66, 0.3);
+  --red: #ff6369;
+  --red-soft: rgba(255, 99, 105, 0.12);
+  --red-border: rgba(255, 99, 105, 0.3);
+  --blue-border: rgba(91, 140, 255, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --overlay: rgba(0, 0, 0, 0.45);
+  --glow: radial-gradient(600px 400px at 0% 40%, rgba(139, 92, 246, 0.16), transparent 70%);
+  color-scheme: dark;
+}
+
+/* No native vibrancy on Linux: paint the window ourselves. */
+:root.platform-linux {
+  --bg-window: var(--bg-sunken);
+}
