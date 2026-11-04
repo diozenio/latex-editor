@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
+import { useProject } from "@/stores/project";
 import { timeAgo } from "@/lib/format";
 import { Dropdown, ContextMenu, type MenuEntry } from "./ui/Menu";
 import { SyncBadge, syncState } from "./SyncBadge";
@@ -59,9 +60,8 @@ export function projectMenu(name: string): MenuEntry[] {
           initial: name,
           confirm: "Rename",
           onSubmit: async (to) => {
-            await api.renameProject(name, to);
-            await app.refreshProjects();
-            if (app.current === name) app.openProject(to);
+            const renamed = await api.renameProject(name, to);
+            await useProject.getState().followRename(name, renamed.name);
           },
         }),
     },
