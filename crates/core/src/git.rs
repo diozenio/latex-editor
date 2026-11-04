@@ -641,18 +641,28 @@ pub fn clone(ws: &Workspace, url: &str, project: &str) -> Result<()> {
     if dir.exists() {
         return Err(Error::AlreadyExists(project.into()));
     }
+    // Clone into a hidden staging folder and move it into place only once checkout is done.
+    // Project listing scaffolds every visible folder (writing `.gitignore` and
+    // `.quilltex/project.json`), which would race the checkout of a half-cloned repo.
+    let staging = ws.root().join(format!(".clone-{}", uuid::Uuid::new_v4()));
     // `canonicalize` yields `\\?\` paths on Windows, which git refuses as a clone target.
-    let shown = dir.display().to_string();
+    let shown = staging.display().to_string();
     let target = match shown.strip_prefix(r"\\?\UNC\") {
         Some(rest) => format!(r"\\{rest}"),
         None => shown.strip_prefix(r"\\?\").unwrap_or(&shown).to_string(),
     };
-    let res = Git { dir: ws.root(), remote: true }.run(&["clone", "-q", "--", url, &target]);
-    if let Err(e) = res {
-        let _ = std::fs::remove_dir_all(&dir);
-        return Err(e);
+    let res = Git { dir: ws.root(), remote: true }
+        .run(&["clone", "-q", "--", url, &target])
+        .and_then(|_| {
+            if dir.exists() {
+                return Err(Error::AlreadyExists(project.into()));
+            }
+            std::fs::rename(&staging, &dir).map_err(Error::from)
+        });
+    if res.is_err() {
+        let _ = std::fs::remove_dir_all(&staging);
     }
-    Ok(())
+    res
 }
 
 #[cfg(test)]
@@ -756,6 +766,31 @@ mod tests {
         assert!(matches!(pull(&ws, "a").unwrap(), MergeOutcome::FastForward));
         assert!(ws.root().join("a/new.tex").exists());
         assert_eq!(status(&ws, "a").unwrap().behind, 0);
+    }
+
+    #[test]
+    fn clone_stages_outside_project_listing() {
+        let (tmp, ws) = setup();
+        let bare = tmp.path().join("remote.git");
+        Git { dir: tmp.path(), remote: false }
+            .run(&["init", "-q", "--bare", "-b", "main", &bare.display().to_string()])
+            .unwrap();
+        let url = bare.to_string_lossy().to_string();
+
+        // The scaffold files are tracked, so writing them mid-clone would break checkout.
+        crate::project::create(&ws, "a", "blank").unwrap();
+        init(&ws, "a", "A", "a@x").unwrap();
+        stage_all(&ws, "a").unwrap();
+        commit(&ws, "a", "init").unwrap();
+        set_remote(&ws, "a", &url).unwrap();
+        push(&ws, "a").unwrap();
+
+        clone(&ws, &url, "b").unwrap();
+        let s = status(&ws, "b").unwrap();
+        assert!(s.files.is_empty(), "clean checkout expected, got {:?}", s.files);
+        assert!(clone(&ws, &url, "b").is_err());
+        let names: Vec<_> = crate::project::list(&ws).unwrap().into_iter().map(|p| p.name).collect();
+        assert_eq!(names.len(), 2, "staging folder leaked into listing: {names:?}");
     }
 }
 
