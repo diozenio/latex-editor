@@ -20,6 +20,21 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      - uses: actions/checkout@v4
+        if: ${{ steps.pr.outputs.pr }}
+        with:
+          ref: ${{ fromJSON(steps.pr.outputs.pr).headBranchName }}
+      - name: Sync Cargo.lock with the release version
+        if: ${{ steps.pr.outputs.pr }}
+        run: |
+          version=$(jq -r '."."' .release-please-manifest.json)
+          perl -0pi -e 's/(name = "quilltex(?:-core|-mcp)?"\nversion = ")[^"]+/${1}'"$version"'/g' Cargo.lock
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -qam "chore(release): sync cargo lock to $version"
+            git push -q
+          fi
       - name: Merge the release pull request
         if: ${{ steps.pr.outputs.pr }}
         env:
