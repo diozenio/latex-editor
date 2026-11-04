@@ -1,5 +1,5 @@
 {
-  "name": "folio",
+  "name": "quilltex",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -27,6 +27,8 @@
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-opener": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "cmdk": "^1.0.0",
     "codemirror-lang-latex": "^0.6.1",
     "lucide-react": "^0.460.0",
