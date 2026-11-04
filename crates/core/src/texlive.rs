@@ -106,10 +106,11 @@ pub fn install(root: &Path, bundled: Option<&Path>, status: &dyn Fn(&str)) -> Re
                 let _ = std::fs::remove_file(&archive);
             }
         }
-        let unpacked = stage.join("TinyTeX");
-        if !unpacked.join("bin").is_dir() {
-            return Err(Error::Other("unexpected TeX Live archive layout".into()));
-        }
+        let unpacked = ["TinyTeX", ".TinyTeX"]
+            .iter()
+            .map(|name| stage.join(name))
+            .find(|dir| dir.join("bin").is_dir())
+            .ok_or_else(|| Error::Other("unexpected TeX Live archive layout".into()))?;
         let _ = std::fs::remove_dir_all(root);
         std::fs::rename(&unpacked, root)?;
         Ok(())
@@ -643,5 +644,29 @@ runfiles size=2\n RELOC/tex/latex/foo/foo.sty\n RELOC/tex/latex/foo/foo-extra.st
             seen,
             ["foo:RELOC/tex/latex/foo/foo.sty", "foo:RELOC/tex/latex/foo/foo-extra.sty", "bar:RELOC/tex/latex/bar/bar.cls"]
         );
+    }
+
+    #[test]
+    fn installs_from_archive_with_hidden_top_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tree = tmp.path().join("src/.TinyTeX");
+        std::fs::create_dir_all(tree.join("bin/x86_64-linux")).unwrap();
+        std::fs::write(tree.join("bin/x86_64-linux").join(exe("latexmk")), "").unwrap();
+        std::fs::write(tree.join(READY_MARKER), TINYTEX_VERSION).unwrap();
+        let archive = tmp.path().join("TinyTeX.tar");
+        let status = Command::new("tar")
+            .arg("-cf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(tmp.path().join("src"))
+            .arg(".TinyTeX")
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let root = tmp.path().join("data/texlive");
+        install(&root, Some(&archive), &|_| {}).unwrap();
+        assert!(is_installed(&root));
+        assert!(!tmp.path().join("data/texlive.partial").exists());
     }
 }
