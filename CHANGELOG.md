@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/diozenio/latex-editor/compare/v1.1.1...v1.1.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* **core:** drop the windows verbatim prefix from canonical paths ([a6b853c](https://github.com/diozenio/latex-editor/commit/a6b853cb46a522e69d4e38a84f09d2c0256dbc93))
+
 ## [1.1.1](https://github.com/diozenio/latex-editor/compare/v1.1.0...v1.1.1) (2026-11-04)
 
 
