@@ -22,6 +22,8 @@ pub enum Engine {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ProjectMeta {
+    /// Stable identity, independent of the folder name. Empty until first scaffolded.
+    pub id: String,
     pub main_file: String,
     pub engine: Engine,
     pub color: String,
@@ -31,6 +33,7 @@ pub struct ProjectMeta {
 impl Default for ProjectMeta {
     fn default() -> Self {
         Self {
+            id: String::new(),
             main_file: "main.tex".into(),
             engine: Engine::Tectonic,
             color: "#6366F1".into(),
@@ -71,6 +74,7 @@ pub fn summary(ws: &Workspace, name: &str) -> Result<ProjectSummary> {
     if !dir.is_dir() {
         return Err(Error::NotFound(name.into()));
     }
+    ensure_scaffold(ws, name)?;
     Ok(ProjectSummary {
         name: name.into(),
         path: dir.display().to_string(),
@@ -113,8 +117,13 @@ pub fn read_meta(ws: &Workspace, name: &str) -> Result<ProjectMeta> {
 
 pub fn write_meta(ws: &Workspace, name: &str, meta: &ProjectMeta) -> Result<()> {
     let dir = ws.project_dir(name)?;
+    // Callers may hold a copy without the id; never let that erase it.
+    let mut meta = meta.clone();
+    if meta.id.is_empty() {
+        meta.id = read_meta(ws, name).map(|m| m.id).unwrap_or_default();
+    }
     std::fs::create_dir_all(dir.join(META_DIR))?;
-    std::fs::write(dir.join(META_FILE), serde_json::to_string_pretty(meta)? + "\n")?;
+    std::fs::write(dir.join(META_FILE), serde_json::to_string_pretty(&meta)? + "\n")?;
     Ok(())
 }
 
@@ -145,7 +154,14 @@ pub fn ensure_scaffold(ws: &Workspace, name: &str) -> Result<()> {
     if !dir.join(META_FILE).exists() {
         let mut meta = guess_meta(&dir);
         meta.color = pick_color(name).into();
+        meta.id = new_id();
         write_meta(ws, name, &meta)?;
+    } else {
+        let mut meta = read_meta(ws, name)?;
+        if meta.id.is_empty() {
+            meta.id = new_id();
+            write_meta(ws, name, &meta)?;
+        }
     }
     let gi = dir.join(".gitignore");
     let current = std::fs::read_to_string(&gi).unwrap_or_default();
@@ -154,6 +170,10 @@ pub fn ensure_scaffold(ws: &Workspace, name: &str) -> Result<()> {
         std::fs::write(&gi, format!("{current}{sep}{GITIGNORE}"))?;
     }
     Ok(())
+}
+
+fn new_id() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 fn pick_color(name: &str) -> &'static str {
@@ -198,6 +218,9 @@ pub fn duplicate(ws: &Workspace, from: &str, to: &str) -> Result<ProjectSummary>
         return Err(Error::AlreadyExists(to.into()));
     }
     copy_dir(&src, &dst, &src)?;
+    let mut meta = read_meta(ws, to)?;
+    meta.id = new_id();
+    write_meta(ws, to, &meta)?;
     summary(ws, to)
 }
 
