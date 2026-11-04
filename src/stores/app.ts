@@ -1,5 +1,13 @@
 import { create } from "zustand";
-import { api, errorMessage, type AppInfo, type Commit, type ProjectSummary, type Settings, type SyncStatus } from "@/lib/ipc";
+import {
+  type AppInfo,
+  api,
+  type Commit,
+  errorMessage,
+  type ProjectSummary,
+  type Settings,
+  type SyncStatus,
+} from "@/lib/ipc";
 
 export type Dialog =
   | { kind: "new-project" }
@@ -34,7 +42,13 @@ export interface Toast {
   message: string;
 }
 
-export type SettingsTab = "general" | "github" | "claude" | "latex" | "about" | "uninstall";
+export type SettingsTab =
+  | "general"
+  | "github"
+  | "claude"
+  | "latex"
+  | "about"
+  | "uninstall";
 
 interface UI {
   sidebar: boolean;
@@ -72,7 +86,15 @@ interface AppState {
 const UI_KEY = "quilltex.ui";
 
 function loadUi(): UI {
-  const base: UI = { sidebar: true, pdf: true, chat: false, logs: false, sidebarTab: "files", palette: false, settings: null };
+  const base: UI = {
+    sidebar: true,
+    pdf: true,
+    chat: false,
+    logs: false,
+    sidebarTab: "files",
+    palette: false,
+    settings: null,
+  };
   try {
     const saved = JSON.parse(localStorage.getItem(UI_KEY) || "{}");
     return { ...base, ...saved, palette: false, settings: null };
@@ -94,11 +116,13 @@ export const useApp = create<AppState>((set, get) => ({
   toasts: [],
 
   async init() {
-    const [info, settings] = await Promise.all([api.appInfo(), api.getSettings()]);
+    const [info, settings] = await Promise.all([
+      api.appInfo(),
+      api.getSettings(),
+    ]);
     set({ info, settings });
     document.documentElement.classList.add(`platform-${info.platform}`);
     applyTheme(settings.theme);
-    // gh may have signed in or out since last launch (e.g. in a terminal).
     void api
       .githubStatus()
       .then(async ({ user }) => {
@@ -109,10 +133,9 @@ export const useApp = create<AppState>((set, get) => ({
     await get().refreshProjects();
     try {
       const last = localStorage.getItem("quilltex.lastProject");
-      if (last && get().projects.some((p) => p.name === last)) get().openProject(last);
-    } catch {
-      /* storage unavailable */
-    }
+      if (last && get().projects.some((p) => p.name === last))
+        get().openProject(last);
+    } catch {}
   },
 
   async refreshProjects() {
@@ -149,9 +172,7 @@ export const useApp = create<AppState>((set, get) => ({
     try {
       if (name) localStorage.setItem("quilltex.lastProject", name);
       else localStorage.removeItem("quilltex.lastProject");
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   },
 
   setUi(patch) {
@@ -160,9 +181,7 @@ export const useApp = create<AppState>((set, get) => ({
     try {
       const { palette: _p, settings: _s, ...persist } = ui;
       localStorage.setItem(UI_KEY, JSON.stringify(persist));
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   },
 
   toggle(key) {
@@ -176,7 +195,10 @@ export const useApp = create<AppState>((set, get) => ({
   toast(message, kind = "info") {
     const id = ++toastId;
     set({ toasts: [...get().toasts, { id, kind, message }] });
-    setTimeout(() => set({ toasts: get().toasts.filter((t) => t.id !== id) }), kind === "error" ? 7000 : 3500);
+    setTimeout(
+      () => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
+      kind === "error" ? 7000 : 3500,
+    );
   },
 
   fail(e) {

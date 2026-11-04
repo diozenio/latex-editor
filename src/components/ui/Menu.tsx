@@ -1,5 +1,5 @@
-import * as DM from "@radix-ui/react-dropdown-menu";
 import * as CM from "@radix-ui/react-context-menu";
+import * as DM from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 
 export interface MenuEntry {
@@ -9,8 +9,12 @@ export interface MenuEntry {
   danger?: boolean;
   disabled?: boolean;
   onSelect?: () => void;
-  /** Icon button revealed on hover; clicking it does not trigger onSelect. */
-  action?: { icon: ReactNode; label: string; danger?: boolean; onClick: () => void };
+  action?: {
+    icon: ReactNode;
+    label: string;
+    danger?: boolean;
+    onClick: () => void;
+  };
   separator?: boolean;
   heading?: string;
 }
@@ -18,7 +22,12 @@ export interface MenuEntry {
 function entries<T extends typeof DM | typeof CM>(M: T, items: MenuEntry[]) {
   return items.map((it, i) => {
     if (it.separator) return <M.Separator key={i} className="menu-sep" />;
-    if (it.heading) return <M.Label key={i} className="menu-label">{it.heading}</M.Label>;
+    if (it.heading)
+      return (
+        <M.Label key={i} className="menu-label">
+          {it.heading}
+        </M.Label>
+      );
     return (
       <M.Item
         key={i}
@@ -72,7 +81,13 @@ export function Dropdown({
   );
 }
 
-export function ContextMenu({ children, items }: { children: ReactNode; items: MenuEntry[] }) {
+export function ContextMenu({
+  children,
+  items,
+}: {
+  children: ReactNode;
+  items: MenuEntry[];
+}) {
   return (
     <CM.Root modal={false}>
       <CM.Trigger asChild>{children}</CM.Trigger>

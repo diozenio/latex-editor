@@ -24,13 +24,10 @@ export interface ProjectSummary {
 
 export interface UsageWindow {
   kind: "five_hour" | "seven_day";
-  /** 0..1 of the plan limit. */
   utilization: number;
-  /** Unix seconds. */
   resetsAt: number;
   totalTokens: number;
   quilltexTokens: number;
-  /** Claude Code doesn't report a token limit; this is derived from spend / utilization. */
   estimatedLimit: number | null;
 }
 
@@ -132,9 +129,7 @@ export interface AppInfo {
   platform: "macos" | "windows" | "linux";
   projectsRoot: string;
   tectonic: boolean;
-  /** QuillTex's private TeX Live (pdfLaTeX/XeLaTeX/LuaLaTeX) is set up. */
   texlive: boolean;
-  /** TeX Live ships inside the app, so setting it up needs no download. */
   texliveBundled: boolean;
   claude: string | null;
   ghInstalled: boolean;

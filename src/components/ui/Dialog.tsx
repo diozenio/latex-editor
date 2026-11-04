@@ -19,7 +19,6 @@ export function Dialog({
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  /** Controls pinned to the top-right corner of the header. */
   corner?: ReactNode;
   wide?: boolean;
   tall?: boolean;
@@ -29,7 +28,10 @@ export function Dialog({
     <D.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <D.Portal>
         <D.Overlay className="dialog-overlay" />
-        <D.Content className={`dialog${wide ? " wide" : ""}${tall ? " tall" : ""}`} aria-describedby={undefined}>
+        <D.Content
+          className={`dialog${wide ? " wide" : ""}${tall ? " tall" : ""}`}
+          aria-describedby={undefined}
+        >
           {bare ? (
             <>
               <D.Title style={{ display: "none" }}>{title}</D.Title>

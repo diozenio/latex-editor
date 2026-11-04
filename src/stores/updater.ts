@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { create } from "zustand";
 import { errorMessage } from "@/lib/ipc";
 
 type Phase = "idle" | "checking" | "available" | "downloading" | "error";
@@ -30,9 +30,12 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
     set({ phase: "checking", error: null });
     try {
       pending = await check();
-      set({ phase: pending ? "available" : "idle", version: pending?.version ?? null, checkedAt: Date.now() });
+      set({
+        phase: pending ? "available" : "idle",
+        version: pending?.version ?? null,
+        checkedAt: Date.now(),
+      });
     } catch (e) {
-      // Offline or no release published yet: stay quiet unless the user asked.
       set({ phase: "error", error: errorMessage(e), checkedAt: Date.now() });
     }
   },

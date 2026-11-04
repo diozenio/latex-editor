@@ -1,13 +1,28 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import * as pdfjs from "pdfjs-dist";
-import type { PDFDocumentProxy } from "pdfjs-dist";
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Download, FileText, Loader2, Maximize2, Minus, Plus, RefreshCw } from "lucide-react";
-import { api } from "@/lib/ipc";
-import { useProject } from "@/stores/project";
-import { useApp } from "@/stores/app";
+import {
+  Download,
+  FileText,
+  Loader2,
+  Maximize2,
+  Minus,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import * as pdfjs from "pdfjs-dist";
+import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { basename, mod } from "@/lib/format";
+import { api } from "@/lib/ipc";
+import { useApp } from "@/stores/app";
+import { useProject } from "@/stores/project";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -26,7 +41,10 @@ export async function downloadPdf() {
     return;
   }
   const stem = basename(project.meta.mainFile).replace(/\.tex$/i, "");
-  const dest = await save({ defaultPath: `${project.name === stem ? stem : `${project.name}`}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
+  const dest = await save({
+    defaultPath: `${project.name === stem ? stem : `${project.name}`}.pdf`,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
   if (!dest) return;
   try {
     await api.savePdfAs(project.name, dest);
@@ -37,7 +55,16 @@ export async function downloadPdf() {
 }
 
 export function PdfViewer() {
-  const { project, session, result, pdfVersion, compiling, highlights, compile, inverseSearch } = useProject();
+  const {
+    project,
+    session,
+    result,
+    pdfVersion,
+    compiling,
+    highlights,
+    compile,
+    inverseSearch,
+  } = useProject();
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [zoom, setZoom] = useState<Zoom>(() => {
@@ -53,7 +80,6 @@ export function PdfViewer() {
   const scroller = useRef<HTMLDivElement>(null);
   const savedScroll = useRef<{ top: number; left: number } | null>(null);
 
-  // Load the PDF whenever a compile produced a new one.
   useEffect(() => {
     if (!project || !result?.pdf) return;
     let cancelled = false;
@@ -61,7 +87,10 @@ export function PdfViewer() {
     (async () => {
       try {
         const buf = await api.readBinary(project.name, result.pdf!);
-        const d = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise;
+        const d = await pdfjs.getDocument({
+          data: new Uint8Array(buf),
+          isEvalSupported: false,
+        }).promise;
         loaded = d;
         if (cancelled) return void d.destroy();
         const s: PageSize[] = [];
@@ -70,25 +99,24 @@ export function PdfViewer() {
           s.push({ w: vp.width, h: vp.height });
         }
         if (cancelled) return void d.destroy();
-        if (scroller.current) savedScroll.current = { top: scroller.current.scrollTop, left: scroller.current.scrollLeft };
+        if (scroller.current)
+          savedScroll.current = {
+            top: scroller.current.scrollTop,
+            left: scroller.current.scrollLeft,
+          };
         setSizes(s);
         setDoc((old) => {
-          // Destroy the previous document after the swap.
           if (old) setTimeout(() => old.destroy(), 1000);
           return d;
         });
-      } catch {
-        /* keep the previous PDF on screen */
-      }
+      } catch {}
     })();
     return () => {
       cancelled = true;
       void loaded;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.name, pdfVersion]);
 
-  // Clear when switching projects (a rename keeps the session and the PDF on screen).
   useEffect(() => {
     setDoc(null);
     setSizes([]);
@@ -117,20 +145,20 @@ export function PdfViewer() {
     setZoom(z);
     try {
       localStorage.setItem("quilltex.pdfZoom", String(z));
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   };
 
-  // Scroll to SyncTeX highlights.
   useEffect(() => {
     const first = highlights.spots[0];
     const el = scroller.current;
     if (!first || !el || !sizes.length) return;
     let top = 16;
     for (let i = 0; i < first.page - 1; i++) top += sizes[i].h * scale + 16;
-    el.scrollTo({ top: Math.max(0, top + first.y * scale - el.clientHeight / 3), behavior: "smooth" });
-  }, [highlights.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+    el.scrollTo({
+      top: Math.max(0, top + first.y * scale - el.clientHeight / 3),
+      behavior: "smooth",
+    });
+  }, [highlights.nonce]);
 
   const onScroll = useCallback(() => {
     const el = scroller.current;
@@ -144,29 +172,52 @@ export function PdfViewer() {
   }, [sizes, scale]);
 
   const z = typeof zoom === "number" ? zoom : scale;
-  const errors = result?.diagnostics.filter((d) => d.severity === "error").length ?? 0;
+  const errors =
+    result?.diagnostics.filter((d) => d.severity === "error").length ?? 0;
 
   return (
     <div className="pane" style={{ flex: 1, background: "var(--bg-content)" }}>
       <div className="pdf-toolbar">
-        <button className="icon-btn sm" title={`Recompile (${mod}↵)`} onClick={() => compile()} disabled={compiling}>
+        <button
+          className="icon-btn sm"
+          title={`Recompile (${mod}↵)`}
+          onClick={() => compile()}
+          disabled={compiling}
+        >
           <RefreshCw size={13} className={compiling ? "spin" : ""} />
         </button>
         <span className="muted" style={{ marginLeft: 4 }}>
           {doc ? `${page} / ${doc.numPages}` : "—"}
         </span>
         <div className="grow" />
-        <button className="icon-btn sm" title="Zoom out" onClick={() => setZoomPersist(Math.max(0.3, +(z - 0.1).toFixed(2)))}>
+        <button
+          className="icon-btn sm"
+          title="Zoom out"
+          onClick={() => setZoomPersist(Math.max(0.3, +(z - 0.1).toFixed(2)))}
+        >
           <Minus size={13} />
         </button>
         <span className="zoom">{Math.round(z * 100)}%</span>
-        <button className="icon-btn sm" title="Zoom in" onClick={() => setZoomPersist(Math.min(4, +(z + 0.1).toFixed(2)))}>
+        <button
+          className="icon-btn sm"
+          title="Zoom in"
+          onClick={() => setZoomPersist(Math.min(4, +(z + 0.1).toFixed(2)))}
+        >
           <Plus size={13} />
         </button>
-        <button className={`icon-btn sm${zoom === "fit" ? " active" : ""}`} title="Fit width" onClick={() => setZoomPersist("fit")}>
+        <button
+          className={`icon-btn sm${zoom === "fit" ? " active" : ""}`}
+          title="Fit width"
+          onClick={() => setZoomPersist("fit")}
+        >
           <Maximize2 size={12} />
         </button>
-        <button className="icon-btn sm" title="Download PDF" onClick={downloadPdf} disabled={!result?.pdf}>
+        <button
+          className="icon-btn sm"
+          title="Download PDF"
+          onClick={downloadPdf}
+          disabled={!result?.pdf}
+        >
           <Download size={13} />
         </button>
       </div>
@@ -189,7 +240,10 @@ export function PdfViewer() {
             {compiling ? (
               <>
                 <Loader2 size={20} className="spin" />
-                <p>Compiling… The first run downloads LaTeX packages and can take a minute.</p>
+                <p>
+                  Compiling… The first run downloads LaTeX packages and can take
+                  a minute.
+                </p>
               </>
             ) : (
               <>
@@ -197,7 +251,11 @@ export function PdfViewer() {
                   <FileText size={20} />
                 </div>
                 <h3>{errors ? "Compilation failed" : "No PDF yet"}</h3>
-                <p>{errors ? "Check the logs below the editor." : `Press ${mod}↵ to compile.`}</p>
+                <p>
+                  {errors
+                    ? "Check the logs below the editor."
+                    : `Press ${mod}↵ to compile.`}
+                </p>
               </>
             )}
           </div>
@@ -231,7 +289,10 @@ const PdfPage = memo(function PdfPage({
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => e.isIntersecting && setVisible(true), { rootMargin: "800px 0px" });
+    const io = new IntersectionObserver(
+      ([e]) => e.isIntersecting && setVisible(true),
+      { rootMargin: "800px 0px" },
+    );
     io.observe(el);
     return () => io.disconnect();
   }, []);
@@ -239,13 +300,14 @@ const PdfPage = memo(function PdfPage({
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
-    let task: ReturnType<Awaited<ReturnType<PDFDocumentProxy["getPage"]>>["render"]> | null = null;
+    let task: ReturnType<
+      Awaited<ReturnType<PDFDocumentProxy["getPage"]>>["render"]
+    > | null = null;
     (async () => {
       const p = await doc.getPage(index);
       if (cancelled) return;
       const dpr = window.devicePixelRatio || 1;
       const vp = p.getViewport({ scale: scale * dpr });
-      // Render offscreen, then blit, so the old page stays until the new one is ready.
       const off = document.createElement("canvas");
       off.width = Math.floor(vp.width);
       off.height = Math.floor(vp.height);
@@ -286,7 +348,12 @@ const PdfPage = memo(function PdfPage({
         <div
           key={`${nonce}-${i}`}
           className="pdf-highlight"
-          style={{ left: s.x * scale - 2, top: s.y * scale - 2, width: s.w * scale + 4, height: Math.max(8, s.h * scale) + 4 }}
+          style={{
+            left: s.x * scale - 2,
+            top: s.y * scale - 2,
+            width: s.w * scale + 4,
+            height: Math.max(8, s.h * scale) + 4,
+          }}
         />
       ))}
     </div>

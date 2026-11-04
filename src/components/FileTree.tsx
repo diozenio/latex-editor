@@ -1,34 +1,47 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
+  BookMarked,
   ChevronRight,
+  Copy,
   File,
   FileCode2,
   FileImage,
+  FilePlus2,
   FileText,
   Folder,
   FolderOpen,
-  BookMarked,
-  FilePlus2,
   FolderPlus,
   Pencil,
-  Trash2,
   Star,
-  Copy,
+  Trash2,
 } from "lucide-react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { basename, dirname, join } from "@/lib/format";
 import { api, type FileNode } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
-import { basename, dirname, join } from "@/lib/format";
 import { ContextMenu, type MenuEntry } from "./ui/Menu";
 
-type Editing = { mode: "rename"; path: string } | { mode: "new-file" | "new-folder"; dir: string } | null;
+type Editing =
+  | { mode: "rename"; path: string }
+  | { mode: "new-file" | "new-folder"; dir: string }
+  | null;
 
 export function fileIcon(name: string, size = 15) {
-  if (/\.tex$/i.test(name)) return <FileCode2 size={size} className="file-icon" />;
-  if (/\.bib$/i.test(name)) return <BookMarked size={size} className="file-icon" />;
-  if (/\.(png|jpe?g|gif|svg|webp|eps|pdf)$/i.test(name)) return <FileImage size={size} className="file-icon" />;
-  if (/\.(md|txt)$/i.test(name)) return <FileText size={size} className="file-icon" />;
+  if (/\.tex$/i.test(name))
+    return <FileCode2 size={size} className="file-icon" />;
+  if (/\.bib$/i.test(name))
+    return <BookMarked size={size} className="file-icon" />;
+  if (/\.(png|jpe?g|gif|svg|webp|eps|pdf)$/i.test(name))
+    return <FileImage size={size} className="file-icon" />;
+  if (/\.(md|txt)$/i.test(name))
+    return <FileText size={size} className="file-icon" />;
   return <File size={size} className="file-icon" />;
 }
 
@@ -46,9 +59,12 @@ export function FileTree() {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState<Editing>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  // Last clicked row; decides where "New file"/"New folder" create.
   const [focused, setFocused] = useState<string | null>(null);
-  const [drag, setDrag] = useState<{ node: FileNode; x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<{
+    node: FileNode;
+    x: number;
+    y: number;
+  } | null>(null);
   const suppressClick = useRef(false);
   const treeRef = useRef<HTMLDivElement>(null);
   const app = useApp();
@@ -57,7 +73,6 @@ export function FileTree() {
     const m = new Map<string, string>();
     for (const f of git?.files ?? []) {
       m.set(f.path, f.kind);
-      // Propagate to parent folders.
       let d = dirname(f.path);
       while (d) {
         if (!m.has(d)) m.set(d, "modified");
@@ -67,7 +82,6 @@ export function FileTree() {
     return m;
   }, [git]);
 
-  // Reveal the active file.
   useEffect(() => {
     if (!active) return;
     let d = dirname(active);
@@ -81,7 +95,6 @@ export function FileTree() {
       d = dirname(d);
     }
     if (changed) setExpanded(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   if (!project) return null;
@@ -135,7 +148,12 @@ export function FileTree() {
     const to = join(toDir, basename(from));
     await run(() => api.renamePath(name, from, to));
     useProject.getState().renamed(from, to);
-    const remap = (p: string) => (p === from ? to : p.startsWith(from + "/") ? to + p.slice(from.length) : p);
+    const remap = (p: string) =>
+      p === from
+        ? to
+        : p.startsWith(from + "/")
+          ? to + p.slice(from.length)
+          : p;
     setExpanded((prev) => {
       const next = new Set([...prev].map(remap));
       if (toDir) next.add(toDir);
@@ -144,11 +162,11 @@ export function FileTree() {
     setFocused((f) => (f ? remap(f) : f));
   };
 
-  // Folder that new files/folders go into: the focused folder, or the focused file's folder.
   const findNode = (nodes: FileNode[], path: string): FileNode | undefined => {
     for (const n of nodes) {
       if (n.path === path) return n;
-      if (n.isDir && path.startsWith(n.path + "/")) return findNode(n.children ?? [], path);
+      if (n.isDir && path.startsWith(n.path + "/"))
+        return findNode(n.children ?? [], path);
     }
   };
   const targetDir = () => {
@@ -162,8 +180,6 @@ export function FileTree() {
     setEditing({ mode, dir });
   };
 
-  // Internal moves use pointer events: HTML5 drag is intercepted by the webview's
-  // native file drop handler (which shows the full-screen import overlay).
   const beginDrag = (e: ReactMouseEvent, n: FileNode) => {
     if (e.button !== 0 || editing) return;
     const sx = e.clientX;
@@ -182,16 +198,19 @@ export function FileTree() {
       setDrag({ node: n, x: ev.clientX, y: ev.clientY });
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const dirEl = el?.closest(".tree [data-dir]");
-      const dir = dirEl ? dirEl.getAttribute("data-dir") ?? "" : null;
+      const dir = dirEl ? (dirEl.getAttribute("data-dir") ?? "") : null;
       target = dir !== null && canMove(n.path, dir) ? dir : null;
       setDropTarget(target);
-      // Hovering a closed folder for a moment opens it.
       const row = el?.closest(".tree-row[data-folder]");
       const folder = row?.getAttribute("data-folder") ?? null;
       if (folder !== hoverDir) {
         hoverDir = folder;
         clearTimeout(expandTimer);
-        if (folder) expandTimer = setTimeout(() => setExpanded((prev) => new Set(prev).add(folder)), 600);
+        if (folder)
+          expandTimer = setTimeout(
+            () => setExpanded((prev) => new Set(prev).add(folder)),
+            600,
+          );
       }
     };
     const end = (commit: boolean) => {
@@ -216,14 +235,19 @@ export function FileTree() {
     window.addEventListener("keydown", onKey);
   };
 
-  // Rows currently on screen, in display order.
   const visibleNodes = (nodes: FileNode[]): FileNode[] =>
-    nodes.flatMap((n) => (n.isDir && expanded.has(n.path) ? [n, ...visibleNodes(n.children ?? [])] : [n]));
+    nodes.flatMap((n) =>
+      n.isDir && expanded.has(n.path)
+        ? [n, ...visibleNodes(n.children ?? [])]
+        : [n],
+    );
 
   const activate = (n: FileNode) => {
     if (n.isDir) toggle(n.path);
-    // Opening a file focuses the editor; keep focus here so keyboard actions apply to the tree.
-    else void openFile(n.path).then(() => requestAnimationFrame(() => treeRef.current?.focus()));
+    else
+      void openFile(n.path).then(() =>
+        requestAnimationFrame(() => treeRef.current?.focus()),
+      );
   };
 
   const confirmDelete = (node: FileNode) =>
@@ -237,7 +261,9 @@ export function FileTree() {
         run(async () => {
           useProject.getState().removed(node.path);
           await api.deletePath(name, node.path);
-          setFocused((f) => (f === node.path || f?.startsWith(node.path + "/") ? null : f));
+          setFocused((f) =>
+            f === node.path || f?.startsWith(node.path + "/") ? null : f,
+          );
         }),
     });
 
@@ -257,19 +283,30 @@ export function FileTree() {
     ];
     if (!node) return items;
     items.push({ separator: true });
-    if (!node.isDir && /\.tex$/i.test(node.name) && project.meta.mainFile !== node.path) {
+    if (
+      !node.isDir &&
+      /\.tex$/i.test(node.name) &&
+      project.meta.mainFile !== node.path
+    ) {
       items.push({
         label: "Set as main file",
         icon: <Star size={14} />,
         onSelect: async () => {
-          await api.setProjectMeta(name, { ...project.meta, mainFile: node.path });
+          await api.setProjectMeta(name, {
+            ...project.meta,
+            mainFile: node.path,
+          });
           await useProject.getState().refreshMeta();
           useProject.getState().scheduleCompile();
         },
       });
     }
     items.push(
-      { label: "Rename", icon: <Pencil size={14} />, onSelect: () => setEditing({ mode: "rename", path: node.path }) },
+      {
+        label: "Rename",
+        icon: <Pencil size={14} />,
+        onSelect: () => setEditing({ mode: "rename", path: node.path }),
+      },
       {
         label: "Copy path",
         icon: <Copy size={14} />,
@@ -278,7 +315,8 @@ export function FileTree() {
       {
         label: "Show in Finder",
         icon: <FolderOpen size={14} />,
-        onSelect: async () => revealItemInDir(await api.projectPath(name, node.path)),
+        onSelect: async () =>
+          revealItemInDir(await api.projectPath(name, node.path)),
       },
       { separator: true },
       {
@@ -294,8 +332,16 @@ export function FileTree() {
   const renderEditRow = (depth: number, mode: "new-file" | "new-folder") => (
     <div className="tree-row" style={{ paddingLeft: 8 + depth * 14 }}>
       <span className="chev" />
-      {mode === "new-folder" ? <Folder size={15} className="file-icon" /> : <File size={15} className="file-icon" />}
-      <InlineInput initial="" onSubmit={submitEdit} onCancel={() => setEditing(null)} />
+      {mode === "new-folder" ? (
+        <Folder size={15} className="file-icon" />
+      ) : (
+        <File size={15} className="file-icon" />
+      )}
+      <InlineInput
+        initial=""
+        onSubmit={submitEdit}
+        onCancel={() => setEditing(null)}
+      />
     </div>
   );
 
@@ -320,10 +366,18 @@ export function FileTree() {
                 activate(n);
               }}
               onDoubleClick={() => {
-                if (!n.isDir) document.querySelector<HTMLElement>(".cm-content")?.focus();
+                if (!n.isDir)
+                  document.querySelector<HTMLElement>(".cm-content")?.focus();
               }}
             >
-              {n.isDir ? <ChevronRight size={13} className={`chev${open ? " open" : ""}`} /> : <span className="chev" />}
+              {n.isDir ? (
+                <ChevronRight
+                  size={13}
+                  className={`chev${open ? " open" : ""}`}
+                />
+              ) : (
+                <span className="chev" />
+              )}
               {n.isDir ? (
                 open ? (
                   <FolderOpen size={15} className="file-icon" />
@@ -334,13 +388,23 @@ export function FileTree() {
                 fileIcon(n.name)
               )}
               {isEditing ? (
-                <InlineInput initial={n.name} selectStem onSubmit={submitEdit} onCancel={() => setEditing(null)} />
+                <InlineInput
+                  initial={n.name}
+                  selectStem
+                  onSubmit={submitEdit}
+                  onCancel={() => setEditing(null)}
+                />
               ) : (
                 <span className="name">{n.name}</span>
               )}
-              {project.meta.mainFile === n.path && <span className="main-badge">MAIN</span>}
+              {project.meta.mainFile === n.path && (
+                <span className="main-badge">MAIN</span>
+              )}
               {mark && (
-                <span className="git-mark" style={{ color: GIT_MARK[mark]?.[1] }}>
+                <span
+                  className="git-mark"
+                  style={{ color: GIT_MARK[mark]?.[1] }}
+                >
                   {n.isDir ? "•" : GIT_MARK[mark]?.[0]}
                 </span>
               )}
@@ -348,7 +412,10 @@ export function FileTree() {
           </ContextMenu>
           {n.isDir && open && (
             <>
-              {editing && editing.mode !== "rename" && editing.dir === n.path && renderEditRow(depth + 1, editing.mode)}
+              {editing &&
+                editing.mode !== "rename" &&
+                editing.dir === n.path &&
+                renderEditRow(depth + 1, editing.mode)}
               {renderNodes(n.children ?? [], depth + 1)}
             </>
           )}
@@ -364,7 +431,14 @@ export function FileTree() {
         data-dir=""
         tabIndex={-1}
         onKeyDown={(e) => {
-          if (editing || e.target !== e.currentTarget || e.metaKey || e.ctrlKey || e.altKey) return;
+          if (
+            editing ||
+            e.target !== e.currentTarget ||
+            e.metaKey ||
+            e.ctrlKey ||
+            e.altKey
+          )
+            return;
           const rows = visibleNodes(tree);
           const i = rows.findIndex((r) => r.path === focused);
           const node = rows[i];
@@ -407,7 +481,6 @@ export function FileTree() {
           e.preventDefault();
         }}
         onClick={(e) => {
-          // Clicking the empty area collapses the focused folder and resets creation to the root.
           if (e.target !== e.currentTarget) return;
           if (focused) {
             const node = findNode(tree, focused);
@@ -416,12 +489,25 @@ export function FileTree() {
           setFocused(null);
         }}
       >
-        {editing && editing.mode !== "rename" && editing.dir === "" && renderEditRow(0, editing.mode)}
+        {editing &&
+          editing.mode !== "rename" &&
+          editing.dir === "" &&
+          renderEditRow(0, editing.mode)}
         {renderNodes(tree, 0)}
-        <TreeActions onNewFile={() => startCreate("new-file")} onNewFolder={() => startCreate("new-folder")} />
+        <TreeActions
+          onNewFile={() => startCreate("new-file")}
+          onNewFolder={() => startCreate("new-folder")}
+        />
         {drag && (
-          <div className="tree-drag-ghost" style={{ left: drag.x + 12, top: drag.y + 8 }}>
-            {drag.node.isDir ? <Folder size={13} className="file-icon" /> : fileIcon(drag.node.name, 13)}
+          <div
+            className="tree-drag-ghost"
+            style={{ left: drag.x + 12, top: drag.y + 8 }}
+          >
+            {drag.node.isDir ? (
+              <Folder size={13} className="file-icon" />
+            ) : (
+              fileIcon(drag.node.name, 13)
+            )}
             {drag.node.name}
           </div>
         )}
@@ -430,14 +516,19 @@ export function FileTree() {
   );
 }
 
-// Exposed so the sidebar header buttons can trigger creation.
 let externalNewFile: (() => void) | null = null;
 let externalNewFolder: (() => void) | null = null;
 export const treeActions = {
   newFile: () => externalNewFile?.(),
   newFolder: () => externalNewFolder?.(),
 };
-function TreeActions({ onNewFile, onNewFolder }: { onNewFile: () => void; onNewFolder: () => void }) {
+function TreeActions({
+  onNewFile,
+  onNewFolder,
+}: {
+  onNewFile: () => void;
+  onNewFolder: () => void;
+}) {
   externalNewFile = onNewFile;
   externalNewFolder = onNewFolder;
   return null;

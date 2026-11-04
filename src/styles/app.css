@@ -16,7 +16,6 @@ body {
   font-size: var(--text-base);
   line-height: 1.45;
   color: var(--text);
-  /* Transparent so native vibrancy shows through the sidebar. */
   background: transparent;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "cv11", "ss01";
@@ -61,8 +60,6 @@ button {
   background: transparent;
 }
 
-/* ---------- shell ---------- */
-
 .app {
   display: flex;
   height: 100%;
@@ -93,7 +90,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 var(--s-3) 0 84px; /* room for traffic lights */
+  padding: 0 var(--s-3) 0 84px;
   gap: var(--s-1);
 }
 .platform-windows .sidebar-head,
@@ -202,8 +199,6 @@ button {
   background: var(--accent);
 }
 
-/* ---------- buttons ---------- */
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -298,7 +293,6 @@ button {
   height: 22px;
   border-radius: var(--r-xs);
 }
-/* Square framed buttons, as in the reference design. */
 .icon-btn.framed {
   border-color: var(--border-strong);
   background: var(--bg-elevated);
@@ -343,8 +337,6 @@ button {
   font-family: var(--font-sans);
   line-height: 16px;
 }
-
-/* ---------- inputs ---------- */
 
 .input,
 .textarea,
@@ -463,8 +455,6 @@ button {
   height: 15px;
 }
 
-/* ---------- badges ---------- */
-
 .count {
   display: inline-flex;
   align-items: center;
@@ -529,8 +519,6 @@ button.tag:hover {
   border-radius: 2.5px;
   flex: none;
 }
-
-/* ---------- lists / nav ---------- */
 
 .nav-item {
   display: flex;
@@ -603,13 +591,10 @@ button.tag:hover {
   box-shadow: var(--shadow-sm);
 }
 
-/* ---------- file tree ---------- */
-
 .tree {
   padding: 2px 0;
   outline: none;
 }
-/* Let the tree fill the sidebar so its empty area is clickable/droppable. */
 .sidebar-body.files {
   display: flex;
   flex-direction: column;
@@ -731,8 +716,6 @@ body.tree-dragging * {
   min-width: 0;
 }
 
-/* ---------- tabs ---------- */
-
 .tabs {
   display: flex;
   align-items: stretch;
@@ -797,8 +780,6 @@ body.tree-dragging * {
   background: var(--text-tertiary);
   margin: 0 6px;
 }
-
-/* ---------- editor ---------- */
 
 .editor-host {
   flex: 1;
@@ -870,8 +851,6 @@ body.tree-dragging * {
   box-shadow: var(--shadow-md);
 }
 
-/* ---------- logs ---------- */
-
 .logs {
   flex: none;
   max-height: 40%;
@@ -927,8 +906,6 @@ body.tree-dragging * {
   user-select: text;
   -webkit-user-select: text;
 }
-
-/* ---------- pdf ---------- */
 
 .pdf-toolbar {
   height: 36px;
@@ -990,8 +967,6 @@ body.tree-dragging * {
   pointer-events: none;
 }
 
-/* ---------- empty states ---------- */
-
 .empty {
   flex: 1;
   display: flex;
@@ -1025,8 +1000,6 @@ body.tree-dragging * {
   box-shadow: var(--shadow-sm);
   color: var(--text-secondary);
 }
-
-/* ---------- home ---------- */
 
 .home {
   flex: 1;
@@ -1138,8 +1111,6 @@ body.tree-dragging * {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-/* ---------- menus (radix) ---------- */
-
 .menu {
   min-width: 200px;
   padding: 5px;
@@ -1248,8 +1219,6 @@ body.tree-dragging * {
   }
 }
 
-/* ---------- dialogs ---------- */
-
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1283,7 +1252,6 @@ body.tree-dragging * {
 .dialog.wide {
   width: min(720px, calc(100vw - 32px));
 }
-/* Fixed height, so content loading in never moves or resizes the dialog. */
 .dialog.tall {
   height: min(640px, calc(100vh - 80px));
 }
@@ -1393,7 +1361,6 @@ body.tree-dragging * {
   color: var(--accent);
 }
 
-/* settings */
 .settings {
   display: flex;
   min-height: 460px;
@@ -1458,8 +1425,6 @@ body.tree-dragging * {
   user-select: text;
   -webkit-user-select: text;
 }
-
-/* ---------- git panel ---------- */
 
 .git-panel {
   display: flex;
@@ -1543,7 +1508,6 @@ body.tree-dragging * {
   flex: 1;
   min-width: 0;
 }
-/* Always laid out; only its visibility changes, so hover never shifts rows. */
 .commit-row .acts {
   display: flex;
   flex: none;
@@ -1653,8 +1617,6 @@ body.tree-dragging * {
 .diff .hunk {
   color: var(--accent-text);
 }
-
-/* ---------- chat ---------- */
 
 .chat {
   width: 380px;
@@ -1884,8 +1846,6 @@ body.tree-dragging * {
   border-color: var(--border-strong);
 }
 
-/* ---------- command palette ---------- */
-
 .palette {
   position: fixed;
   top: 16%;
@@ -1949,8 +1909,6 @@ body.tree-dragging * {
   text-align: center;
   color: var(--text-tertiary);
 }
-
-/* ---------- toasts ---------- */
 
 .toasts {
   position: fixed;

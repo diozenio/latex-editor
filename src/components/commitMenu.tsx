@@ -1,11 +1,10 @@
 import { Copy, Eye, History, RotateCcw, Scissors, Undo2 } from "lucide-react";
-import { api } from "@/lib/ipc";
 import type { Commit } from "@/lib/ipc";
+import { api } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
 import type { MenuEntry } from "./ui/Menu";
 
-/** Run a history action, then bring the status and file tree up to date. */
 async function run(fn: () => Promise<unknown>, success: string) {
   const app = useApp.getState();
   try {
@@ -19,19 +18,39 @@ async function run(fn: () => Promise<unknown>, success: string) {
   }
 }
 
-function confirm(title: string, message: string, confirmLabel: string, danger: boolean, onConfirm: () => Promise<void>) {
-  useApp.getState().openDialog({ kind: "confirm", title, message, confirm: confirmLabel, danger, onConfirm });
+function confirm(
+  title: string,
+  message: string,
+  confirmLabel: string,
+  danger: boolean,
+  onConfirm: () => Promise<void>,
+) {
+  useApp
+    .getState()
+    .openDialog({
+      kind: "confirm",
+      title,
+      message,
+      confirm: confirmLabel,
+      danger,
+      onConfirm,
+    });
 }
 
-/** Actions for one entry of the history, shared by its menu and its dialog. */
-export function commitMenu(project: string, c: Commit, isHead: boolean, open = true): MenuEntry[] {
+export function commitMenu(
+  project: string,
+  c: Commit,
+  isHead: boolean,
+  open = true,
+): MenuEntry[] {
   const quoted = `“${c.summary}” (${c.short})`;
   const items: MenuEntry[] = [];
   if (open) {
     items.push({
       label: "View changes",
       icon: <Eye size={14} />,
-      onSelect: () => useApp.getState().openDialog({ kind: "commit", project, commit: c }),
+      onSelect: () =>
+        useApp.getState().openDialog({ kind: "commit", project, commit: c }),
     });
     items.push({ separator: true });
   }
@@ -46,7 +65,11 @@ export function commitMenu(project: string, c: Commit, isHead: boolean, open = t
           `The files will go back to how they were at ${quoted}. This is saved as a new commit, so nothing is lost from the history.`,
           "Restore",
           false,
-          () => run(() => api.gitRestoreVersion(project, c.id), `Restored ${c.short}`),
+          () =>
+            run(
+              () => api.gitRestoreVersion(project, c.id),
+              `Restored ${c.short}`,
+            ),
         ),
     },
     {
@@ -58,7 +81,8 @@ export function commitMenu(project: string, c: Commit, isHead: boolean, open = t
           `A new commit will reverse only the changes made in ${quoted}. Later work is kept.`,
           "Undo",
           false,
-          () => run(() => api.gitRevertCommit(project, c.id), `Undid ${c.short}`),
+          () =>
+            run(() => api.gitRevertCommit(project, c.id), `Undid ${c.short}`),
         ),
     },
     {
@@ -87,7 +111,8 @@ export function commitMenu(project: string, c: Commit, isHead: boolean, open = t
           }`,
           "Delete",
           true,
-          () => run(() => api.gitDeleteCommit(project, c.id), `Deleted ${c.short}`),
+          () =>
+            run(() => api.gitDeleteCommit(project, c.id), `Deleted ${c.short}`),
         ),
     },
     { separator: true },

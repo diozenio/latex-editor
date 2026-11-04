@@ -1,4 +1,5 @@
-export const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+export const isMac =
+  typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 export const mod = isMac ? "⌘" : "Ctrl+";
 
 export function timeAgo(ms: number): string {
@@ -11,7 +12,11 @@ export function timeAgo(ms: number): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: d > 300 ? "numeric" : undefined });
+  return new Date(ms).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: d > 300 ? "numeric" : undefined,
+  });
 }
 
 export function basename(path: string): string {
@@ -27,7 +32,6 @@ export function join(dir: string, name: string): string {
   return dir ? `${dir}/${name}` : name;
 }
 
-/** Turn a free-form title into a safe folder/repo name. */
 export function slug(s: string): string {
   return s
     .normalize("NFKD")
@@ -37,7 +41,9 @@ export function slug(s: string): string {
     .toLowerCase();
 }
 
-/** 1234 → "1.2K", 2_500_000 → "2.5M". */
 export function compactNumber(n: number): string {
-  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n);
 }

@@ -1,6 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowUp, Check, Copy, Loader2, Plus, Sparkles, Square, Wrench, X, AlertCircle, Terminal } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowUp,
+  Check,
+  Copy,
+  Loader2,
+  Plus,
+  Sparkles,
+  Square,
+  Terminal,
+  Wrench,
+  X,
+} from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { api, errorMessage } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
@@ -8,7 +20,14 @@ import { useProject } from "@/stores/project";
 
 type Part =
   | { kind: "text"; text: string }
-  | { kind: "tool"; id: string; name: string; input: Record<string, unknown>; status: "running" | "done" | "error"; result?: string };
+  | {
+      kind: "tool";
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      status: "running" | "done" | "error";
+      result?: string;
+    };
 
 interface Msg {
   id: string;
@@ -37,28 +56,39 @@ const useChats = create<ChatStore>((set, get) => ({
   setRunning: (key, v) => set({ running: { ...get().running, [key]: v } }),
 }));
 
-// One stream state per running chat.
 const streams = new Map<string, { sawDelta: boolean }>();
 
 function update(key: string, fn: (msgs: Msg[]) => Msg[], sessionId?: string) {
   const s = useChats.getState();
   const chat = s.get(key);
-  s.set(key, { messages: fn(chat.messages), sessionId: sessionId ?? chat.sessionId });
+  s.set(key, {
+    messages: fn(chat.messages),
+    sessionId: sessionId ?? chat.sessionId,
+  });
 }
 
 function withLastAssistant(msgs: Msg[], fn: (m: Msg) => Msg): Msg[] {
   const last = msgs[msgs.length - 1];
   if (last?.role === "assistant") return [...msgs.slice(0, -1), fn(last)];
-  return [...msgs, fn({ id: crypto.randomUUID(), role: "assistant", parts: [] })];
+  return [
+    ...msgs,
+    fn({ id: crypto.randomUUID(), role: "assistant", parts: [] }),
+  ];
 }
 
 function appendText(m: Msg, text: string): Msg {
   const last = m.parts[m.parts.length - 1];
-  if (last?.kind === "text") return { ...m, parts: [...m.parts.slice(0, -1), { kind: "text", text: last.text + text }] };
+  if (last?.kind === "text")
+    return {
+      ...m,
+      parts: [
+        ...m.parts.slice(0, -1),
+        { kind: "text", text: last.text + text },
+      ],
+    };
   return { ...m, parts: [...m.parts, { kind: "text", text }] };
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 function handleEvent(id: string, ev: any) {
   const st = streams.get(id) ?? { sawDelta: false };
   streams.set(id, st);
@@ -71,7 +101,9 @@ function handleEvent(id: string, ev: any) {
       const e = ev.event;
       if (e?.type === "content_block_delta" && e.delta?.type === "text_delta") {
         st.sawDelta = true;
-        update(key, (msgs) => withLastAssistant(msgs, (m) => appendText(m, e.delta.text)));
+        update(key, (msgs) =>
+          withLastAssistant(msgs, (m) => appendText(m, e.delta.text)),
+        );
       }
       break;
     }
@@ -83,9 +115,22 @@ function handleEvent(id: string, ev: any) {
           withLastAssistant(msgs, (m) => {
             let out = m;
             for (const b of blocks) {
-              if (b.type === "text" && !st.sawDelta) out = appendText(out, b.text);
+              if (b.type === "text" && !st.sawDelta)
+                out = appendText(out, b.text);
               if (b.type === "tool_use")
-                out = { ...out, parts: [...out.parts, { kind: "tool", id: b.id, name: b.name, input: b.input ?? {}, status: "running" }] };
+                out = {
+                  ...out,
+                  parts: [
+                    ...out.parts,
+                    {
+                      kind: "tool",
+                      id: b.id,
+                      name: b.name,
+                      input: b.input ?? {},
+                      status: "running",
+                    },
+                  ],
+                };
             }
             return out;
           }),
@@ -95,15 +140,21 @@ function handleEvent(id: string, ev: any) {
       break;
     }
     case "user": {
-      const blocks: any[] = Array.isArray(ev.message?.content) ? ev.message.content : [];
+      const blocks: any[] = Array.isArray(ev.message?.content)
+        ? ev.message.content
+        : [];
       for (const b of blocks) {
         if (b.type !== "tool_result") continue;
-        const text = Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? "").join("\n") : String(b.content ?? "");
+        const text = Array.isArray(b.content)
+          ? b.content.map((c: any) => c.text ?? "").join("\n")
+          : String(b.content ?? "");
         update(key, (msgs) =>
           msgs.map((m) => ({
             ...m,
             parts: m.parts.map((p) =>
-              p.kind === "tool" && p.id === b.tool_use_id ? { ...p, status: b.is_error ? "error" : "done", result: text } : p,
+              p.kind === "tool" && p.id === b.tool_use_id
+                ? { ...p, status: b.is_error ? "error" : "done", result: text }
+                : p,
             ),
           })),
         );
@@ -113,47 +164,70 @@ function handleEvent(id: string, ev: any) {
     }
     case "result":
       if (ev.is_error && ev.result) {
-        update(key, (msgs) => withLastAssistant(msgs, (m) => appendText(m, `\n\n⚠️ ${ev.result}`)));
+        update(key, (msgs) =>
+          withLastAssistant(msgs, (m) => appendText(m, `\n\n⚠️ ${ev.result}`)),
+        );
       }
       if (ev.session_id) update(key, (m) => m, ev.session_id);
       break;
   }
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Keep the open project in step with what the assistant just did to it. */
 function followTool(key: string, toolId: string) {
   const part = useChats
     .getState()
     .get(key)
     .messages.flatMap((m) => m.parts)
     .find((p) => p.kind === "tool" && p.id === toolId);
-  if (part?.kind !== "tool" || part.name.replace(/^mcp__quilltex__/, "") !== "rename_project") return;
-  const { project, new_name } = part.input as { project?: string; new_name?: string };
-  if (project && new_name?.trim()) void useProject.getState().followRename(project, new_name.trim());
+  if (
+    part?.kind !== "tool" ||
+    part.name.replace(/^mcp__quilltex__/, "") !== "rename_project"
+  )
+    return;
+  const { project, new_name } = part.input as {
+    project?: string;
+    new_name?: string;
+  };
+  if (project && new_name?.trim())
+    void useProject.getState().followRename(project, new_name.trim());
 }
 
 let listening = false;
 function ensureListeners() {
   if (listening) return;
   listening = true;
-  void listen<{ chatId: string; event: unknown }>("chat-event", (e) => handleEvent(e.payload.chatId, e.payload.event));
-  void listen<{ chatId: string; ok: boolean; error: string | null }>("chat-done", (e) => {
-    const { chatId, error } = e.payload;
-    const key = chatId;
-    const s = useChats.getState();
-    s.setRunning(key, false);
-    streams.delete(chatId);
-    if (error) update(key, (msgs) => withLastAssistant(msgs, (m) => appendText(m, `\n\n⚠️ ${error.slice(0, 600)}`)));
-    // Mark tools that never reported as done.
-    update(key, (msgs) =>
-      msgs.map((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === "tool" && p.status === "running" ? { ...p, status: "done" } : p)) })),
-    );
-    void api.chatSave(key, useChats.getState().get(key));
-  });
+  void listen<{ chatId: string; event: unknown }>("chat-event", (e) =>
+    handleEvent(e.payload.chatId, e.payload.event),
+  );
+  void listen<{ chatId: string; ok: boolean; error: string | null }>(
+    "chat-done",
+    (e) => {
+      const { chatId, error } = e.payload;
+      const key = chatId;
+      const s = useChats.getState();
+      s.setRunning(key, false);
+      streams.delete(chatId);
+      if (error)
+        update(key, (msgs) =>
+          withLastAssistant(msgs, (m) =>
+            appendText(m, `\n\n⚠️ ${error.slice(0, 600)}`),
+          ),
+        );
+      update(key, (msgs) =>
+        msgs.map((m) => ({
+          ...m,
+          parts: m.parts.map((p) =>
+            p.kind === "tool" && p.status === "running"
+              ? { ...p, status: "done" }
+              : p,
+          ),
+        })),
+      );
+      void api.chatSave(key, useChats.getState().get(key));
+    },
+  );
 }
 
-// Full ids pin the exact version passed to `claude --model`; "" leaves the choice to the CLI.
 const MODELS: [string, string][] = [
   ["", "Default"],
   ["claude-fable-5-1", "Fable 5.1"],
@@ -176,9 +250,11 @@ export function ChatPanel() {
   const model = useApp((s) => s.settings?.chatModel ?? "");
   const saveSettings = useApp((s) => s.saveSettings);
   const project = useProject((s) => s.project);
-  // Keyed by the project's stable id, so renames keep the chat and a new project reusing a name starts clean.
   const key = project?.meta.id ? `project-${project.meta.id}` : "global";
-  const chat = useChats((s) => s.chats[key]) ?? { messages: [], sessionId: null };
+  const chat = useChats((s) => s.chats[key]) ?? {
+    messages: [],
+    sessionId: null,
+  };
   const running = useChats((s) => !!s.running[key]);
   const [input, setInput] = useState("");
   const body = useRef<HTMLDivElement>(null);
@@ -206,14 +282,23 @@ export function ChatPanel() {
     const context = project
       ? `Open project: "${project.name}" (main file ${project.meta.mainFile}). Open file: ${active ?? "none"} (cursor at line ${cursorLine}).`
       : "No project is open; the user is on the project list.";
-    update(key, (m) => [...m, { id: crypto.randomUUID(), role: "user", parts: [{ kind: "text", text }] }]);
+    update(key, (m) => [
+      ...m,
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ kind: "text", text }],
+      },
+    ]);
     useChats.getState().setRunning(key, true);
     try {
       await useProject.getState().saveAll();
       await api.chatSend(key, text, chat.sessionId, context);
     } catch (e) {
       useChats.getState().setRunning(key, false);
-      update(key, (msgs) => withLastAssistant(msgs, (m) => appendText(m, `⚠️ ${errorMessage(e)}`)));
+      update(key, (msgs) =>
+        withLastAssistant(msgs, (m) => appendText(m, `⚠️ ${errorMessage(e)}`)),
+      );
     }
   };
 
@@ -228,10 +313,19 @@ export function ChatPanel() {
         <span className="title">
           <Sparkles size={14} /> Assistant
         </span>
-        <button className="icon-btn sm" title="New chat" onClick={reset} disabled={running}>
+        <button
+          className="icon-btn sm"
+          title="New chat"
+          onClick={reset}
+          disabled={running}
+        >
           <Plus size={14} />
         </button>
-        <button className="icon-btn sm" title="Close" onClick={() => toggle("chat")}>
+        <button
+          className="icon-btn sm"
+          title="Close"
+          onClick={() => toggle("chat")}
+        >
           <X size={14} />
         </button>
       </div>
@@ -243,18 +337,24 @@ export function ChatPanel() {
             </div>
             <h3>Claude Code not found</h3>
             <p>
-              The assistant runs your local Claude Code. Install it, sign in once with <code>claude</code>, then reopen this
-              panel.
+              The assistant runs your local Claude Code. Install it, sign in
+              once with <code>claude</code>, then reopen this panel.
             </p>
-            <button className="btn" onClick={() => setUi({ settings: "claude" })}>
+            <button
+              className="btn"
+              onClick={() => setUi({ settings: "claude" })}
+            >
               Open settings
             </button>
           </div>
         ) : chat.messages.length === 0 ? (
           <div style={{ marginTop: "auto" }}>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>How can I help?</div>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
+              How can I help?
+            </div>
             <div className="muted">
-              I can create and edit projects, write LaTeX, fix compile errors and commit, all through QuillTex’s own tools.
+              I can create and edit projects, write LaTeX, fix compile errors
+              and commit, all through QuillTex’s own tools.
             </div>
             <div className="suggestions">
               {SUGGESTIONS.map((s) => (
@@ -276,9 +376,10 @@ export function ChatPanel() {
                   <ToolCard key={i} part={p} />
                 ),
               )}
-              {m.role === "assistant" && !(running && m === chat.messages[chat.messages.length - 1]) && (
-                <CopyButton text={messageText(m)} />
-              )}
+              {m.role === "assistant" &&
+                !(running && m === chat.messages[chat.messages.length - 1]) && (
+                  <CopyButton text={messageText(m)} />
+                )}
             </div>
           ))
         )}
@@ -294,11 +395,19 @@ export function ChatPanel() {
         <div className="chat-box">
           <textarea
             rows={2}
-            placeholder={project ? `Ask about “${project.name}”…` : "Ask anything about your projects…"}
+            placeholder={
+              project
+                ? `Ask about “${project.name}”…`
+                : "Ask anything about your projects…"
+            }
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.nativeEvent.isComposing
+              ) {
                 e.preventDefault();
                 void send();
               }
@@ -306,7 +415,9 @@ export function ChatPanel() {
             disabled={!info?.claude}
           />
           <div className="row">
-            <span className="ctx">{project ? `Context: ${project.name}` : "Context: all projects"}</span>
+            <span className="ctx">
+              {project ? `Context: ${project.name}` : "Context: all projects"}
+            </span>
             <select
               className="model-select"
               title="Model"
@@ -314,18 +425,29 @@ export function ChatPanel() {
               onChange={(e) => void saveSettings({ chatModel: e.target.value })}
               disabled={running}
             >
-              {(MODELS.some(([id]) => id === model) ? MODELS : [...MODELS, [model, model]]).map(([id, label]) => (
+              {(MODELS.some(([id]) => id === model)
+                ? MODELS
+                : [...MODELS, [model, model]]
+              ).map(([id, label]) => (
                 <option key={id} value={id}>
                   {label}
                 </option>
               ))}
             </select>
             {running ? (
-              <button className="send-btn" title="Stop" onClick={() => api.chatCancel(key)}>
+              <button
+                className="send-btn"
+                title="Stop"
+                onClick={() => api.chatCancel(key)}
+              >
                 <Square size={11} fill="currentColor" />
               </button>
             ) : (
-              <button className="send-btn" disabled={!input.trim()} onClick={() => send()}>
+              <button
+                className="send-btn"
+                disabled={!input.trim()}
+                onClick={() => send()}
+              >
                 <ArrowUp size={15} />
               </button>
             )}
@@ -394,14 +516,23 @@ function CopyButton({ text }: { text: string }) {
 
 function ToolCard({ part }: { part: Extract<Part, { kind: "tool" }> }) {
   const short = part.name.replace(/^mcp__quilltex__/, "");
-  const arg = (part.input.path ?? part.input.name ?? part.input.project ?? part.input.message ?? "") as string;
+  const arg = (part.input.path ??
+    part.input.name ??
+    part.input.project ??
+    part.input.message ??
+    "") as string;
   const open = () => {
     const proj = part.input.project as string | undefined;
     const path = part.input.path as string | undefined;
-    if (proj && path && useProject.getState().project?.name === proj) void useProject.getState().openFile(path);
+    if (proj && path && useProject.getState().project?.name === proj)
+      void useProject.getState().openFile(path);
   };
   return (
-    <div className={`tool-card${part.status === "error" ? " error" : ""}`} title={part.result ?? ""} onClick={open}>
+    <div
+      className={`tool-card${part.status === "error" ? " error" : ""}`}
+      title={part.result ?? ""}
+      onClick={open}
+    >
       {part.status === "running" ? (
         <Loader2 size={13} className="spin" />
       ) : part.status === "error" ? (
@@ -416,7 +547,6 @@ function ToolCard({ part }: { part: Extract<Part, { kind: "tool" }> }) {
   );
 }
 
-/** Tiny, safe markdown: fenced code, inline code, bold. No HTML injection. */
 function renderMarkdown(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   const parts = text.split(/```[a-zA-Z]*\n?/);
@@ -427,8 +557,10 @@ function renderMarkdown(text: string): ReactNode[] {
     }
     const segs = chunk.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g);
     segs.forEach((s, j) => {
-      if (s.startsWith("`") && s.endsWith("`") && s.length > 2) out.push(<code key={`${i}-${j}`}>{s.slice(1, -1)}</code>);
-      else if (s.startsWith("**") && s.endsWith("**") && s.length > 4) out.push(<strong key={`${i}-${j}`}>{s.slice(2, -2)}</strong>);
+      if (s.startsWith("`") && s.endsWith("`") && s.length > 2)
+        out.push(<code key={`${i}-${j}`}>{s.slice(1, -1)}</code>);
+      else if (s.startsWith("**") && s.endsWith("**") && s.length > 4)
+        out.push(<strong key={`${i}-${j}`}>{s.slice(2, -2)}</strong>);
       else if (s) out.push(s);
     });
   });

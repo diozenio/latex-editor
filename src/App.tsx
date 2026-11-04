@@ -1,21 +1,21 @@
-import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Loader2, PanelLeftOpen } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChatPanel } from "@/components/ChatPanel";
+import { CommandPalette } from "@/components/CommandPalette";
+import { Dialogs } from "@/components/Dialogs";
+import { treeActions } from "@/components/FileTree";
+import { Home, importZipFlow } from "@/components/Home";
+import { downloadPdf } from "@/components/PdfViewer";
+import { SettingsDialog } from "@/components/Settings";
+import { Sidebar } from "@/components/Sidebar";
+import { Toasts } from "@/components/ui/Toasts";
+import { exportZipFlow, Workspace } from "@/components/Workspace";
+import { mod } from "@/lib/format";
 import { api, type SyncStatus } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { projectExists, useProject } from "@/stores/project";
-import { mod } from "@/lib/format";
-import { Sidebar } from "@/components/Sidebar";
-import { Home, importZipFlow } from "@/components/Home";
-import { Workspace, exportZipFlow } from "@/components/Workspace";
-import { Dialogs } from "@/components/Dialogs";
-import { SettingsDialog } from "@/components/Settings";
-import { CommandPalette } from "@/components/CommandPalette";
-import { Toasts } from "@/components/ui/Toasts";
-import { downloadPdf } from "@/components/PdfViewer";
-import { ChatPanel } from "@/components/ChatPanel";
-import { treeActions } from "@/components/FileTree";
 import { useUpdater } from "@/stores/updater";
 
 function runAction(id: string) {
@@ -53,17 +53,20 @@ function runAction(id: string) {
     case "toggle-chat":
       return app.toggle("chat");
     case "toggle-git":
-      return app.setUi({ sidebar: true, sidebarTab: app.ui.sidebarTab === "git" ? "files" : "git" });
+      return app.setUi({
+        sidebar: true,
+        sidebarTab: app.ui.sidebarTab === "git" ? "files" : "git",
+      });
     case "compile":
       return proj.project && proj.compile();
   }
 }
 
-/**
- * A project folder renamed outside QuillTex shows up as two root events in one burst:
- * the open project's folder vanishing and an unknown one appearing.
- */
-const roots: { gone: string | null; added: string | null; timer?: ReturnType<typeof setTimeout> } = { gone: null, added: null };
+const roots: {
+  gone: string | null;
+  added: string | null;
+  timer?: ReturnType<typeof setTimeout>;
+} = { gone: null, added: null };
 
 function rootChanged(project: string) {
   const app = useApp.getState();
@@ -71,19 +74,25 @@ function rootChanged(project: string) {
   else if (!app.projects.some((p) => p.name === project)) roots.added = project;
   else return;
   clearTimeout(roots.timer);
-  // Give the assistant's own rename report a chance to land first.
   roots.timer = setTimeout(async () => {
     const { gone, added } = roots;
     roots.gone = roots.added = null;
-    if (!gone || gone !== useApp.getState().current || (await projectExists(gone))) return;
-    if (added && (await projectExists(added))) return void useProject.getState().followRename(gone, added);
+    if (
+      !gone ||
+      gone !== useApp.getState().current ||
+      (await projectExists(gone))
+    )
+      return;
+    if (added && (await projectExists(added)))
+      return void useProject.getState().followRename(gone, added);
     if (gone !== useApp.getState().current) return;
-    useApp.getState().toast(`“${gone}” was moved or deleted outside QuillTex.`, "error");
+    useApp
+      .getState()
+      .toast(`“${gone}” was moved or deleted outside QuillTex.`, "error");
     useApp.getState().openProject(null);
   }, 600);
 }
 
-// Keyboard shortcuts for platforms without a native menu bar handling them.
 const SHORTCUTS: Record<string, string> = {
   k: "command-palette",
   b: "toggle-sidebar",
@@ -115,10 +124,8 @@ export default function App() {
       });
   }, []);
 
-  // Load the project whenever the selection changes.
   useEffect(() => {
     const p = useProject.getState();
-    // A rename already updated the loaded project in place.
     if (!current) p.unload();
     else if (p.project?.name !== current) void p.load(current);
   }, [current]);
@@ -129,13 +136,20 @@ export default function App() {
       listen<{ project: string; paths: string[] }>("fs-changed", (e) => {
         const { project, paths } = e.payload;
         if (paths.includes("")) rootChanged(project);
-        if (project === useApp.getState().current) void useProject.getState().onExternalChange(paths);
+        if (project === useApp.getState().current)
+          void useProject.getState().onExternalChange(paths);
         clearTimeout(refreshTimer.current);
-        refreshTimer.current = setTimeout(() => void useApp.getState().refreshProjects(), 600);
+        refreshTimer.current = setTimeout(
+          () => void useApp.getState().refreshProjects(),
+          600,
+        );
       }),
       listen<SyncStatus>("sync-status", (e) => {
         useApp.getState().setSync(e.payload);
-        if (e.payload.project === useApp.getState().current && e.payload.status) {
+        if (
+          e.payload.project === useApp.getState().current &&
+          e.payload.status
+        ) {
           useProject.setState({ git: e.payload.status });
         }
       }),
@@ -156,11 +170,17 @@ export default function App() {
             return;
           }
           const dpr = window.devicePixelRatio || 1;
-          const el = document.elementFromPoint(p.position.x / dpr, p.position.y / dpr);
+          const el = document.elementFromPoint(
+            p.position.x / dpr,
+            p.position.y / dpr,
+          );
           const dir = el?.closest("[data-dir]")?.getAttribute("data-dir") ?? "";
           const added = await api.importFiles(proj.name, p.paths, dir);
           await useProject.getState().refreshTree();
-          app.toast(`Added ${added.length} file${added.length === 1 ? "" : "s"}`, "success");
+          app.toast(
+            `Added ${added.length} file${added.length === 1 ? "" : "s"}`,
+            "success",
+          );
         } catch (e) {
           app.fail(e);
         }
@@ -169,17 +189,16 @@ export default function App() {
     return () => unsubs.forEach((u) => u.then((f) => f()));
   }, []);
 
-  // Look for a new release at launch and whenever the window regains focus.
   useEffect(() => {
     const recheck = () => {
-      if (Date.now() - useUpdater.getState().checkedAt > 30 * 60_000) void useUpdater.getState().check();
+      if (Date.now() - useUpdater.getState().checkedAt > 30 * 60_000)
+        void useUpdater.getState().check();
     };
     recheck();
     window.addEventListener("focus", recheck);
     return () => window.removeEventListener("focus", recheck);
   }, []);
 
-  // Refresh git state and fetch when the window regains focus.
   useEffect(() => {
     const onFocus = () => {
       const name = useApp.getState().current;
@@ -193,7 +212,9 @@ export default function App() {
     if (!info || info.platform === "macos") return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
-      const key = (e.shiftKey ? "shift+" : "") + (e.key.length === 1 && e.shiftKey ? e.key.toUpperCase() : e.key);
+      const key =
+        (e.shiftKey ? "shift+" : "") +
+        (e.key.length === 1 && e.shiftKey ? e.key.toUpperCase() : e.key);
       const action = SHORTCUTS[key];
       if (action) {
         e.preventDefault();
@@ -206,7 +227,10 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div className="app" style={{ alignItems: "center", justifyContent: "center" }}>
+      <div
+        className="app"
+        style={{ alignItems: "center", justifyContent: "center" }}
+      >
         <Loader2 className="spin" size={20} />
       </div>
     );
@@ -221,12 +245,19 @@ export default function App() {
         <main className="main">
           <header className="topbar drag no-border" data-tauri-drag-region>
             {!ui.sidebar && (
-              <button className="icon-btn" title={`Show sidebar (${mod}B)`} onClick={() => toggle("sidebar")}>
+              <button
+                className="icon-btn"
+                title={`Show sidebar (${mod}B)`}
+                onClick={() => toggle("sidebar")}
+              >
                 <PanelLeftOpen size={16} />
               </button>
             )}
             <div className="spacer" data-tauri-drag-region />
-            <button className={`ai-btn${ui.chat ? " active" : ""}`} onClick={() => toggle("chat")}>
+            <button
+              className={`ai-btn${ui.chat ? " active" : ""}`}
+              onClick={() => toggle("chat")}
+            >
               ✦ AI assistant
             </button>
           </header>
@@ -236,7 +267,13 @@ export default function App() {
           </div>
         </main>
       )}
-      {dropping && <div className="drop-overlay">{current ? "Drop files to add them to the project" : "Drop a .zip to import it as a project"}</div>}
+      {dropping && (
+        <div className="drop-overlay">
+          {current
+            ? "Drop files to add them to the project"
+            : "Drop a .zip to import it as a project"}
+        </div>
+      )}
       <Dialogs />
       <SettingsDialog />
       <CommandPalette />

@@ -1,6 +1,13 @@
-import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
-import { api, type CompileResult, type FileNode, type PdfSpot, type ProjectSummary, type RepoStatus } from "@/lib/ipc";
+import { create } from "zustand";
+import {
+  api,
+  type CompileResult,
+  type FileNode,
+  type PdfSpot,
+  type ProjectSummary,
+  type RepoStatus,
+} from "@/lib/ipc";
 import { useApp } from "./app";
 
 export type TabKind = "text" | "image" | "pdf" | "binary";
@@ -8,30 +15,29 @@ export type TabKind = "text" | "image" | "pdf" | "binary";
 export interface Doc {
   content: string;
   saved: string;
-  /** Bumped when content is replaced from outside the editor. */
   version: number;
 }
 
-const TEXT_EXT = /\.(tex|bib|cls|sty|bst|txt|md|bbx|cbx|dtx|ins|ltx|latexmkrc|gitignore|csv|tsv|json|yaml|yml|toml|xml|svg|lua|py|r|m|tikz|pgf|def|cfg|clo|fd)$/i;
+const TEXT_EXT =
+  /\.(tex|bib|cls|sty|bst|txt|md|bbx|cbx|dtx|ins|ltx|latexmkrc|gitignore|csv|tsv|json|yaml|yml|toml|xml|svg|lua|py|r|m|tikz|pgf|def|cfg|clo|fd)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
 
 export function tabKind(path: string): TabKind {
   if (IMAGE_EXT.test(path)) return "image";
   if (/\.pdf$/i.test(path)) return "pdf";
-  if (TEXT_EXT.test(path) || !/\.[^/]+$/.test(path.split("/").pop() ?? "")) return "text";
+  if (TEXT_EXT.test(path) || !/\.[^/]+$/.test(path.split("/").pop() ?? ""))
+    return "text";
   return "binary";
 }
 
 interface ProjectState {
   project: ProjectSummary | null;
-  /** Bumped by `load`; a rename keeps it, so views can tell a rename from a switch. */
   session: number;
   tree: FileNode[];
   tabs: string[];
   active: string | null;
   docs: Record<string, Doc>;
   compiling: boolean;
-  /** Slow step of the running compile (setting up TeX Live, installing a package). */
   compileStatus: string | null;
   result: CompileResult | null;
   pdfVersion: number;
@@ -41,7 +47,6 @@ interface ProjectState {
   cursorLine: number;
 
   load: (name: string) => Promise<void>;
-  /** Follow a project renamed elsewhere (dialog, assistant, Finder) without reloading it. */
   followRename: (from: string, to: string) => Promise<void>;
   unload: () => void;
   refreshTree: () => Promise<void>;
@@ -51,10 +56,8 @@ interface ProjectState {
   closeTab: (path: string) => void;
   setActive: (path: string) => void;
   edit: (path: string, content: string) => void;
-  /** Write to disk only. Runs on its own shortly after every keystroke. */
   save: (path: string) => Promise<void>;
   saveAll: () => Promise<void>;
-  /** ⌘S: flush every buffer, then compile if the project compiles automatically. */
   commit: () => Promise<void>;
   compile: () => Promise<void>;
   scheduleCompile: () => void;
@@ -67,7 +70,6 @@ interface ProjectState {
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-/** Content each path is being written with, so the watcher doesn't mistake our own writes for outside edits. */
 const writing = new Map<string, string>();
 const writeChains = new Map<string, Promise<void>>();
 const AUTOSAVE_MS = 250;
@@ -116,16 +118,21 @@ export const useProject = create<ProjectState>((set, get) => ({
       await Promise.all([get().refreshTree(), get().refreshGit()]);
       let restored: string[] = [];
       try {
-        restored = JSON.parse(localStorage.getItem(`quilltex.tabs.${name}`) || "[]");
-      } catch {
-        /* ignore */
-      }
-      const exists = (p: string) => flatten(get().tree).some((n) => n.path === p);
+        restored = JSON.parse(
+          localStorage.getItem(`quilltex.tabs.${name}`) || "[]",
+        );
+      } catch {}
+      const exists = (p: string) =>
+        flatten(get().tree).some((n) => n.path === p);
       const toOpen = restored.filter(exists);
-      if (!toOpen.length && exists(project.meta.mainFile)) toOpen.push(project.meta.mainFile);
+      if (!toOpen.length && exists(project.meta.mainFile))
+        toOpen.push(project.meta.mainFile);
       for (const p of toOpen) await get().openFile(p);
-      if (exists(project.meta.mainFile) && get().tabs.includes(project.meta.mainFile)) get().setActive(project.meta.mainFile);
-      // Show the last PDF right away, then refresh it.
+      if (
+        exists(project.meta.mainFile) &&
+        get().tabs.includes(project.meta.mainFile)
+      )
+        get().setActive(project.meta.mainFile);
       void get().compile();
     } catch (e) {
       fail(e);
@@ -133,7 +140,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   async followRename(from, to) {
-    if (from === to || get().project?.name === to) return; // already followed
+    if (from === to || get().project?.name === to) return;
     moveTabs(from, to);
     const app = useApp.getState();
     if (get().project?.name === from) {
@@ -142,7 +149,6 @@ export const useProject = create<ProjectState>((set, get) => ({
         if (get().project?.name !== from) return;
         set({ project });
         if (app.current === from) app.openProject(to);
-        // Retry anything an autosave tried to write under the old name mid-rename.
         void get().saveAll();
         await Promise.all([get().refreshTree(), get().refreshGit()]);
         void api.syncNow(to);
@@ -157,7 +163,16 @@ export const useProject = create<ProjectState>((set, get) => ({
     saveTimers.forEach((t) => clearTimeout(t));
     saveTimers.clear();
     void get().saveAll();
-    set({ project: null, session: get().session + 1, tree: [], tabs: [], active: null, docs: {}, result: null, git: null });
+    set({
+      project: null,
+      session: get().session + 1,
+      tree: [],
+      tabs: [],
+      active: null,
+      docs: {},
+      result: null,
+      git: null,
+    });
   },
 
   async refreshTree() {
@@ -194,7 +209,12 @@ export const useProject = create<ProjectState>((set, get) => ({
     if (kind === "text" && !get().docs[path]) {
       try {
         const content = await api.readText(p.name, path);
-        set({ docs: { ...get().docs, [path]: { content, saved: content, version: 1 } } });
+        set({
+          docs: {
+            ...get().docs,
+            [path]: { content, saved: content, version: 1 },
+          },
+        });
       } catch (e) {
         useApp.getState().fail(e);
         return;
@@ -216,7 +236,10 @@ export const useProject = create<ProjectState>((set, get) => ({
     set({
       tabs: next,
       docs: rest,
-      active: active === path ? (next[Math.min(idx, next.length - 1)] ?? null) : active,
+      active:
+        active === path
+          ? (next[Math.min(idx, next.length - 1)] ?? null)
+          : active,
     });
     if (project) persistTabs(project.name, next);
   },
@@ -230,18 +253,18 @@ export const useProject = create<ProjectState>((set, get) => ({
     if (!doc || doc.content === content) return;
     set({ docs: { ...get().docs, [path]: { ...doc, content } } });
     clearTimeout(saveTimers.get(path));
-    saveTimers.set(path, setTimeout(() => void get().save(path), AUTOSAVE_MS));
+    saveTimers.set(
+      path,
+      setTimeout(() => void get().save(path), AUTOSAVE_MS),
+    );
   },
 
   save(path) {
     clearTimeout(saveTimers.get(path));
-    // Closing a tab or the project drops the doc right away; still write what it held.
     const project = get().project;
     const session = get().session;
     const snapshot = get().docs[path];
-    // Writes to one path run one after another, so an older write never lands last.
     const run = (writeChains.get(path) ?? Promise.resolve()).then(async () => {
-      // Same session means same project, possibly renamed since: write under its current name.
       const same = get().session === session && !!get().project;
       const p = same ? get().project : project;
       const doc = (same && get().docs[path]) || snapshot;
@@ -250,13 +273,19 @@ export const useProject = create<ProjectState>((set, get) => ({
       writing.set(path, content);
       try {
         await api.writeText(p.name, path, content);
-        const cur = get().session === session && get().project ? get().docs[path] : undefined;
-        if (cur) set({ docs: { ...get().docs, [path]: { ...cur, saved: content } } });
+        const cur =
+          get().session === session && get().project
+            ? get().docs[path]
+            : undefined;
+        if (cur)
+          set({ docs: { ...get().docs, [path]: { ...cur, saved: content } } });
       } catch (e) {
         useApp.getState().fail(e);
       } finally {
-        // Keep it a moment longer: the watcher reports the write ~150ms later.
-        setTimeout(() => writing.get(path) === content && writing.delete(path), 1000);
+        setTimeout(
+          () => writing.get(path) === content && writing.delete(path),
+          1000,
+        );
       }
     });
     writeChains.set(path, run);
@@ -290,14 +319,20 @@ export const useProject = create<ProjectState>((set, get) => ({
     await get().saveAll();
     const session = get().session;
     set({ compiling: true, compileStatus: null });
-    const unlisten = await listen<{ project: string; message: string }>("compile-status", (e) => {
-      if (e.payload.project === p.name && get().session === session) set({ compileStatus: e.payload.message });
-    });
+    const unlisten = await listen<{ project: string; message: string }>(
+      "compile-status",
+      (e) => {
+        if (e.payload.project === p.name && get().session === session)
+          set({ compileStatus: e.payload.message });
+      },
+    );
     try {
       const result = await api.compile(p.name);
       if (get().session !== session) return;
       set({ result, pdfVersion: result.pdf ? Date.now() : get().pdfVersion });
-      const errors = result.diagnostics.filter((d) => d.severity === "error").length;
+      const errors = result.diagnostics.filter(
+        (d) => d.severity === "error",
+      ).length;
       if (!result.ok && errors) useApp.getState().setUi({ logs: true });
     } catch (e) {
       if (get().session === session) {
@@ -306,7 +341,9 @@ export const useProject = create<ProjectState>((set, get) => ({
             ok: false,
             pdf: null,
             log: String(e),
-            diagnostics: [{ severity: "error", file: null, line: null, message: String(e) }],
+            diagnostics: [
+              { severity: "error", file: null, line: null, message: String(e) },
+            ],
             durationMs: 0,
           },
         });
@@ -325,12 +362,12 @@ export const useProject = create<ProjectState>((set, get) => ({
   async onExternalChange(paths) {
     const p = get().project;
     if (!p) return;
-    // The folder itself moved: App follows the rename or leaves; nothing to refresh here.
     if (paths.includes("") && !(await projectExists(p.name))) return;
     const fileChanges = paths.filter((x) => x !== ".git" && x !== "");
     if (fileChanges.length) await get().refreshTree();
     void get().refreshGit();
-    if (fileChanges.some((x) => x === ".quilltex/project.json")) void get().refreshMeta();
+    if (fileChanges.some((x) => x === ".quilltex/project.json"))
+      void get().refreshMeta();
 
     let texChanged = false;
     for (const path of fileChanges) {
@@ -340,21 +377,36 @@ export const useProject = create<ProjectState>((set, get) => ({
       try {
         disk = await api.readText(p.name, path);
       } catch {
-        continue; // deleted; leave the buffer so nothing is lost
+        continue;
       }
-      if (disk === writing.get(path)) continue; // our own autosave
+      if (disk === writing.get(path)) continue;
       if (disk === doc.saved || disk === doc.content) {
-        if (disk !== doc.saved) set({ docs: { ...get().docs, [path]: { ...doc, saved: disk } } });
+        if (disk !== doc.saved)
+          set({ docs: { ...get().docs, [path]: { ...doc, saved: disk } } });
         continue;
       }
       if (doc.content === doc.saved) {
-        set({ docs: { ...get().docs, [path]: { content: disk, saved: disk, version: doc.version + 1 } } });
+        set({
+          docs: {
+            ...get().docs,
+            [path]: { content: disk, saved: disk, version: doc.version + 1 },
+          },
+        });
         texChanged ||= /\.(tex|bib)$/i.test(path);
       } else {
-        useApp.getState().toast(`${path} changed on disk while you had unsaved edits. Your version is kept.`, "error");
+        useApp
+          .getState()
+          .toast(
+            `${path} changed on disk while you had unsaved edits. Your version is kept.`,
+            "error",
+          );
       }
     }
-    if (!texChanged && fileChanges.some((x) => /\.(tex|bib|cls|sty)$/i.test(x) && !get().docs[x])) texChanged = true;
+    if (
+      !texChanged &&
+      fileChanges.some((x) => /\.(tex|bib|cls|sty)$/i.test(x) && !get().docs[x])
+    )
+      texChanged = true;
     if (texChanged && p.meta.autoCompile) get().scheduleCompile();
   },
 
@@ -367,9 +419,7 @@ export const useProject = create<ProjectState>((set, get) => ({
         set({ highlights: { spots, nonce: Date.now() } });
         useApp.getState().setUi({ pdf: true });
       }
-    } catch {
-      /* no synctex yet */
-    }
+    } catch {}
   },
 
   async inverseSearch(page, x, y) {
@@ -378,23 +428,32 @@ export const useProject = create<ProjectState>((set, get) => ({
     try {
       const spot = await api.synctexInverse(p.name, page, x, y);
       if (spot) await get().openFile(spot.file, spot.line);
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   },
 
   renamed(from, to) {
     const { tabs, docs, active, project } = get();
-    const map = (p: string) => (p === from ? to : p.startsWith(from + "/") ? to + p.slice(from.length) : p);
+    const map = (p: string) =>
+      p === from
+        ? to
+        : p.startsWith(from + "/")
+          ? to + p.slice(from.length)
+          : p;
     const nextDocs: Record<string, Doc> = {};
     for (const [k, v] of Object.entries(docs)) nextDocs[map(k)] = v;
     const nextTabs = tabs.map(map);
-    set({ tabs: nextTabs, docs: nextDocs, active: active ? map(active) : null });
+    set({
+      tabs: nextTabs,
+      docs: nextDocs,
+      active: active ? map(active) : null,
+    });
     if (project) persistTabs(project.name, nextTabs);
   },
 
   removed(path) {
-    for (const t of get().tabs.filter((t) => t === path || t.startsWith(path + "/"))) {
+    for (const t of get().tabs.filter(
+      (t) => t === path || t.startsWith(path + "/"),
+    )) {
       const { [t]: _, ...rest } = get().docs;
       set({ docs: rest });
       get().closeTab(t);
@@ -411,17 +470,13 @@ function moveTabs(from: string, to: string) {
     const tabs = localStorage.getItem(`quilltex.tabs.${from}`);
     if (tabs !== null) localStorage.setItem(`quilltex.tabs.${to}`, tabs);
     localStorage.removeItem(`quilltex.tabs.${from}`);
-  } catch {
-    /* ignore */
-  }
+  } catch {}
 }
 
 function persistTabs(project: string, tabs: string[]) {
   try {
     localStorage.setItem(`quilltex.tabs.${project}`, JSON.stringify(tabs));
-  } catch {
-    /* ignore */
-  }
+  } catch {}
 }
 
 export function flatten(nodes: FileNode[]): FileNode[] {

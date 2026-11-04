@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
@@ -9,6 +8,7 @@ import {
   Download,
   FileArchive,
   FolderOpen,
+  Info,
   Loader2,
   MoreHorizontal,
   PanelLeftOpen,
@@ -17,26 +17,29 @@ import {
   Settings2,
   Sparkles,
   Terminal,
-  X,
   Trash,
-  Info,
+  X,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { basename, mod } from "@/lib/format";
 import { api } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { tabKind, useProject } from "@/stores/project";
-import { basename, mod } from "@/lib/format";
-import { Editor } from "./Editor";
-import { PdfViewer, downloadPdf } from "./PdfViewer";
 import { ChatPanel } from "./ChatPanel";
+import { Editor } from "./Editor";
+import { fileIcon } from "./FileTree";
+import { downloadPdf, PdfViewer } from "./PdfViewer";
 import { SyncBadge } from "./SyncBadge";
 import { Dropdown } from "./ui/Menu";
-import { fileIcon } from "./FileTree";
 
 export async function exportZipFlow() {
   const { project } = useProject.getState();
   const app = useApp.getState();
   if (!project) return;
-  const dest = await save({ defaultPath: `${project.name}.zip`, filters: [{ name: "ZIP", extensions: ["zip"] }] });
+  const dest = await save({
+    defaultPath: `${project.name}.zip`,
+    filters: [{ name: "ZIP", extensions: ["zip"] }],
+  });
   if (!dest) return;
   try {
     await useProject.getState().saveAll();
@@ -49,7 +52,8 @@ export async function exportZipFlow() {
 
 export function Workspace() {
   const { ui, toggle, setUi, openDialog } = useApp();
-  const { project, active, tabs, compiling, result, git, compile } = useProject();
+  const { project, active, tabs, compiling, result, git, compile } =
+    useProject();
   const sync = useApp((s) => (project ? s.sync[project.name] : undefined));
   const [split, setSplit] = useState(() => {
     try {
@@ -72,9 +76,7 @@ export function Workspace() {
       setDragging(false);
       try {
         localStorage.setItem("quilltex.split", String(split));
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -85,13 +87,18 @@ export function Workspace() {
   }, [dragging, split]);
 
   if (!project) return null;
-  const errors = result?.diagnostics.filter((d) => d.severity === "error").length ?? 0;
+  const errors =
+    result?.diagnostics.filter((d) => d.severity === "error").length ?? 0;
 
   return (
     <main className="main">
       <header className="topbar drag" data-tauri-drag-region>
         {!ui.sidebar && (
-          <button className="icon-btn" title={`Show sidebar (${mod}B)`} onClick={() => toggle("sidebar")}>
+          <button
+            className="icon-btn"
+            title={`Show sidebar (${mod}B)`}
+            onClick={() => toggle("sidebar")}
+          >
             <PanelLeftOpen size={16} />
           </button>
         )}
@@ -114,28 +121,59 @@ export function Workspace() {
             onClick={() => setUi({ sidebar: true, sidebarTab: "git" })}
           />
         )}
-        <button className={`ai-btn${ui.chat ? " active" : ""}`} onClick={() => toggle("chat")} title={`AI assistant (${mod}J)`}>
+        <button
+          className={`ai-btn${ui.chat ? " active" : ""}`}
+          onClick={() => toggle("chat")}
+          title={`AI assistant (${mod}J)`}
+        >
           <Sparkles size={14} /> AI assistant
         </button>
-        <button className="btn primary" onClick={() => compile()} disabled={compiling} title={`Compile (${mod}↵)`}>
-          {compiling ? <Loader2 size={14} className="spin" /> : <Play size={13} fill="currentColor" />}
+        <button
+          className="btn primary"
+          onClick={() => compile()}
+          disabled={compiling}
+          title={`Compile (${mod}↵)`}
+        >
+          {compiling ? (
+            <Loader2 size={14} className="spin" />
+          ) : (
+            <Play size={13} fill="currentColor" />
+          )}
           {compiling ? "Compiling" : "Compile"}
         </button>
-        <button className={`icon-btn framed${ui.pdf ? " active" : ""}`} title="Toggle PDF" onClick={() => toggle("pdf")}>
+        <button
+          className={`icon-btn framed${ui.pdf ? " active" : ""}`}
+          title="Toggle PDF"
+          onClick={() => toggle("pdf")}
+        >
           <PanelRight size={15} />
         </button>
         <Dropdown
           align="end"
           items={[
-            { label: "Download PDF…", icon: <Download size={14} />, right: `${mod}⇧S`, onSelect: downloadPdf },
-            { label: "Export as ZIP…", icon: <FileArchive size={14} />, onSelect: exportZipFlow },
+            {
+              label: "Download PDF…",
+              icon: <Download size={14} />,
+              right: `${mod}⇧S`,
+              onSelect: downloadPdf,
+            },
+            {
+              label: "Export as ZIP…",
+              icon: <FileArchive size={14} />,
+              onSelect: exportZipFlow,
+            },
             {
               label: "Show in Finder",
               icon: <FolderOpen size={14} />,
-              onSelect: async () => revealItemInDir(await api.projectPath(project.name)),
+              onSelect: async () =>
+                revealItemInDir(await api.projectPath(project.name)),
             },
             { separator: true },
-            { label: "Project settings…", icon: <Settings2 size={14} />, onSelect: () => openDialog({ kind: "project-settings" }) },
+            {
+              label: "Project settings…",
+              icon: <Settings2 size={14} />,
+              onSelect: () => openDialog({ kind: "project-settings" }),
+            },
             {
               label: "Clear build cache",
               icon: <Trash size={14} />,
@@ -153,8 +191,18 @@ export function Workspace() {
         />
       </header>
 
-      <div className="panes" ref={panes} style={{ cursor: dragging ? "col-resize" : undefined }}>
-        <div className="pane" style={{ flex: ui.pdf ? `0 0 ${split * 100}%` : 1, pointerEvents: dragging ? "none" : undefined }}>
+      <div
+        className="panes"
+        ref={panes}
+        style={{ cursor: dragging ? "col-resize" : undefined }}
+      >
+        <div
+          className="pane"
+          style={{
+            flex: ui.pdf ? `0 0 ${split * 100}%` : 1,
+            pointerEvents: dragging ? "none" : undefined,
+          }}
+        >
           <Tabs />
           {active ? <ActiveView path={active} /> : <NoFile />}
           {ui.logs && <Logs />}
@@ -162,8 +210,14 @@ export function Workspace() {
         </div>
         {ui.pdf && (
           <>
-            <div className={`splitter${dragging ? " active" : ""}`} onMouseDown={() => setDragging(true)} />
-            <div className="pane" style={{ flex: 1, pointerEvents: dragging ? "none" : undefined }}>
+            <div
+              className={`splitter${dragging ? " active" : ""}`}
+              onMouseDown={() => setDragging(true)}
+            />
+            <div
+              className="pane"
+              style={{ flex: 1, pointerEvents: dragging ? "none" : undefined }}
+            >
               <PdfViewer />
             </div>
           </>
@@ -217,13 +271,19 @@ function ActiveView({ path }: { path: string }) {
   const kind = tabKind(path);
   const project = useProject((s) => s.project);
   if (kind === "text") return <Editor path={path} />;
-  if (kind === "image") return <ImagePreview project={project!.name} path={path} />;
+  if (kind === "image")
+    return <ImagePreview project={project!.name} path={path} />;
   return (
     <div className="empty">
       <div className="empty-icon">{fileIcon(path, 20)}</div>
       <h3>{basename(path)}</h3>
       <p>This file can’t be edited here.</p>
-      <button className="btn" onClick={async () => revealItemInDir(await api.projectPath(project!.name, path))}>
+      <button
+        className="btn"
+        onClick={async () =>
+          revealItemInDir(await api.projectPath(project!.name, path))
+        }
+      >
         Show in Finder
       </button>
     </div>
@@ -242,7 +302,9 @@ function ImagePreview({ project, path }: { project: string; path: string }) {
       if (u) URL.revokeObjectURL(u);
     };
   }, [project, path]);
-  return <div className="preview-image">{url && <img src={url} alt={path} />}</div>;
+  return (
+    <div className="preview-image">{url && <img src={url} alt={path} />}</div>
+  );
 }
 
 function NoFile() {
@@ -290,15 +352,29 @@ function Logs() {
               className="log-item"
               onClick={() => {
                 const file = d.file ?? project?.meta.mainFile;
-                if (file && d.line) void openFile(file.replace(/^\.\//, ""), d.line);
+                if (file && d.line)
+                  void openFile(file.replace(/^\.\//, ""), d.line);
               }}
             >
               {d.severity === "error" ? (
-                <AlertCircle size={14} style={{ color: "var(--red)", flex: "none", marginTop: 2 }} />
+                <AlertCircle
+                  size={14}
+                  style={{ color: "var(--red)", flex: "none", marginTop: 2 }}
+                />
               ) : d.severity === "warning" ? (
-                <AlertTriangle size={14} style={{ color: "var(--orange)", flex: "none", marginTop: 2 }} />
+                <AlertTriangle
+                  size={14}
+                  style={{ color: "var(--orange)", flex: "none", marginTop: 2 }}
+                />
               ) : (
-                <Info size={14} style={{ color: "var(--text-tertiary)", flex: "none", marginTop: 2 }} />
+                <Info
+                  size={14}
+                  style={{
+                    color: "var(--text-tertiary)",
+                    flex: "none",
+                    marginTop: 2,
+                  }}
+                />
               )}
               <span className="msg">{d.message}</span>
               {(d.file || d.line) && (
@@ -316,9 +392,19 @@ function Logs() {
 }
 
 function StatusBar({ errors }: { errors: number }) {
-  const { result, compiling, compileStatus, project, cursorLine, active, docs, forwardSearch } = useProject();
+  const {
+    result,
+    compiling,
+    compileStatus,
+    project,
+    cursorLine,
+    active,
+    docs,
+    forwardSearch,
+  } = useProject();
   const toggle = useApp((s) => s.toggle);
-  const warnings = result?.diagnostics.filter((d) => d.severity === "warning").length ?? 0;
+  const warnings =
+    result?.diagnostics.filter((d) => d.severity === "warning").length ?? 0;
   const words = useMemo(() => {
     const text = active ? docs[active]?.content : "";
     if (!text || !active?.endsWith(".tex")) return null;
@@ -335,12 +421,14 @@ function StatusBar({ errors }: { errors: number }) {
       <button onClick={() => toggle("logs")}>
         {compiling ? (
           <>
-            <Loader2 size={11} className="spin" /> {compileStatus ?? "Compiling"}
+            <Loader2 size={11} className="spin" />{" "}
+            {compileStatus ?? "Compiling"}
           </>
         ) : result ? (
           result.ok ? (
             <>
-              <CheckCircle2 size={11} style={{ color: "var(--green)" }} /> Compiled in {(result.durationMs / 1000).toFixed(1)}s
+              <CheckCircle2 size={11} style={{ color: "var(--green)" }} />{" "}
+              Compiled in {(result.durationMs / 1000).toFixed(1)}s
             </>
           ) : (
             <span className="err">
@@ -365,13 +453,20 @@ function StatusBar({ errors }: { errors: number }) {
       )}
       <div className="grow" />
       {active?.endsWith(".tex") && (
-        <button title={`Or ${mod}-click in the editor`} onClick={() => active && forwardSearch(active, cursorLine)}>
+        <button
+          title={`Or ${mod}-click in the editor`}
+          onClick={() => active && forwardSearch(active, cursorLine)}
+        >
           Show in PDF →
         </button>
       )}
       {words != null && <span>{words.toLocaleString()} words</span>}
       {active && <span>Ln {cursorLine}</span>}
-      <span>{project?.meta.engine === "tectonic" ? "Tectonic" : project?.meta.engine.replace("latexmk-", "")}</span>
+      <span>
+        {project?.meta.engine === "tectonic"
+          ? "Tectonic"
+          : project?.meta.engine.replace("latexmk-", "")}
+      </span>
     </div>
   );
 }
