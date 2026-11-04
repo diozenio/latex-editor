@@ -18,6 +18,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TECTONIC_VERSION = "0.17.0";
+const ENGINES_REVISION = 1;
+const devNull = process.platform === "win32" ? "NUL" : "/dev/null";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const binDir = join(root, "src-tauri", "binaries");
 const resourcesDir = join(root, "src-tauri", "resources");
@@ -93,28 +95,113 @@ function tinytexAsset(t) {
   return `TinyTeX-1-${platform}-v${TINYTEX_VERSION}.${isWin ? "exe" : "tar.xz"}`;
 }
 
-async function prepareEngines() {
-  const cacheDir = join(resourcesDir, "tectonic-cache");
-  const texliveDir = join(resourcesDir, "texlive");
-  const stampFile = join(resourcesDir, ".stamp");
-  const templates = readFileSync(
-    join(root, "crates", "core", "src", "templates.rs"),
+function enginesVersion() {
+  const hash = createHash("sha256").update(
+    JSON.stringify({
+      revision: ENGINES_REVISION,
+      tectonic: TECTONIC_VERSION,
+      tinytex: TINYTEX_VERSION,
+    }),
   );
-  const stamp = JSON.stringify({
-    target,
-    tectonic: TECTONIC_VERSION,
-    tinytex: TINYTEX_VERSION,
-    templates: createHash("sha256").update(templates).digest("hex"),
-  });
+  for (const file of [
+    ["crates", "core", "src", "templates.rs"],
+    ["crates", "core", "examples", "prepare-engines.rs"],
+  ]) {
+    hash.update(readFileSync(join(root, ...file)));
+  }
+  return hash.digest("hex").slice(0, 12);
+}
+
+function repoSlug() {
+  if (process.env.GITHUB_REPOSITORY) return process.env.GITHUB_REPOSITORY;
+  const url = execFileSync("git", ["remote", "get-url", "origin"], {
+    cwd: root,
+    encoding: "utf8",
+  }).trim();
+  return url.match(/github\.com[:/](.+?)(?:\.git)?$/)[1];
+}
+
+function exists(url) {
+  try {
+    execFileSync("curl", ["-fsIL", "--retry", "3", "-o", devNull, url]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function prepareEngines() {
+  const tag = `engines-${enginesVersion()}`;
+  const stamp = `${tag} ${target}`;
+  const stampFile = join(resourcesDir, ".stamp");
   if (existsSync(stampFile) && readFileSync(stampFile, "utf8") === stamp) {
-    console.log("✓ bundled engine files are up to date");
+    console.log(`✓ bundled engine files are up to date (${tag})`);
     return;
   }
-  if (target !== hostTriple())
-    throw new Error(`engine files must be prepared on a ${target} machine`);
-
+  const repo = repoSlug();
+  const asset = `engines-${target}.tar.gz`;
+  const url = `https://github.com/${repo}/releases/download/${tag}/${asset}`;
   const work = join(tmpdir(), `quilltex-engines-${Date.now()}`);
   mkdirSync(work, { recursive: true });
+  const bundle = join(work, asset);
+  if (exists(url)) {
+    download(url, bundle);
+    for (const name of ["tectonic-cache", "texlive"]) {
+      rmSync(join(resourcesDir, name), { recursive: true, force: true });
+    }
+    execFileSync("tar", ["-xzf", bundle, "-C", resourcesDir], {
+      stdio: "inherit",
+    });
+  } else {
+    console.log(`⚙ ${tag} has no ${asset} yet, preparing it`);
+    buildEngines(work);
+    execFileSync(
+      "tar",
+      ["-czf", bundle, "-C", resourcesDir, "tectonic-cache", "texlive"],
+      { stdio: "inherit" },
+    );
+    if (args.includes("--publish-engines")) publishEngines(repo, tag, bundle);
+  }
+  rmSync(work, { recursive: true, force: true });
+  writeFileSync(stampFile, stamp);
+  console.log(`✓ ${resourcesDir} (${tag})`);
+}
+
+function publishEngines(repo, tag, bundle) {
+  try {
+    execFileSync(
+      "gh",
+      [
+        "release",
+        "create",
+        tag,
+        "--repo",
+        repo,
+        "--prerelease",
+        "--latest=false",
+        "--title",
+        tag,
+        "--notes",
+        "Prepared TeX engines that the app builds bundle. Not an app release.",
+      ],
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.log(`… ${tag} already exists`);
+  }
+  execFileSync(
+    "gh",
+    ["release", "upload", tag, bundle, "--repo", repo, "--clobber"],
+    { stdio: "inherit" },
+  );
+  console.log(`✓ published ${tag}`);
+}
+
+function buildEngines(work) {
+  const cacheDir = join(resourcesDir, "tectonic-cache");
+  const texliveDir = join(resourcesDir, "texlive");
+  if (target !== hostTriple())
+    throw new Error(`engine files must be prepared on a ${target} machine`);
   const asset = tinytexAsset(target);
   const archive = join(work, asset);
   download(
@@ -160,9 +247,7 @@ async function prepareEngines() {
       env: { ...process.env, XZ_OPT: "-T0" },
     },
   );
-  rmSync(work, { recursive: true, force: true });
-  writeFileSync(stampFile, stamp);
-  console.log(`✓ ${resourcesDir}`);
+  rmSync(join(work, "TinyTeX"), { recursive: true, force: true });
 }
 
 async function fetchTectonic() {
