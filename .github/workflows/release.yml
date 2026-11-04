@@ -55,4 +55,4 @@ jobs:
           tagName: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
           releaseName: QuillTex ${{ inputs.tag || github.ref_name }}
           releaseDraft: false
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
