@@ -39,7 +39,12 @@ jobs:
         if: ${{ steps.pr.outputs.pr }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge "${{ fromJSON(steps.pr.outputs.pr).number }}" --squash --repo "${{ github.repository }}"
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            gh pr merge "${{ fromJSON(steps.pr.outputs.pr).number }}" --squash --repo "${{ github.repository }}" && exit 0
+            sleep 6
+          done
+          exit 1
       - id: release
         if: ${{ steps.pr.outputs.pr }}
         uses: googleapis/release-please-action@v4
