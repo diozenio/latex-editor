@@ -3,7 +3,7 @@
 ## Setup
 
 ```sh
-npm install   # instala as dependências e ativa os hooks do husky
+pnpm install  # instala as dependências e ativa os hooks do husky
 ```
 
 ## Convenção de commits e releases
@@ -30,7 +30,7 @@ Escopos permitidos: `app`, `core`, `mcp`, `ui`, `chat`, `deps`, `scripts`, `rele
 
 ### Como fazer commits
 
-- `npm run commit` abre um assistente interativo (commitizen).
+- `pnpm commit` abre um assistente interativo (commitizen).
 - Ou escreva a mensagem manualmente. O hook `commit-msg` (commitlint) rejeita mensagens fora do padrão, e o `pre-commit` roda o Biome nos arquivos staged.
 - Com Claude Code, os commits são feitos pela skill `staged-atomic-commits` (ver `CLAUDE.md`).
 

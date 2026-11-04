@@ -13,12 +13,12 @@ Editor LaTeX local-first (Tauri 2 + React + Rust). Veja o `README.md` para a vis
 ## Comandos
 
 ```sh
-npm install                              # também instala os hooks do husky (script prepare)
-npm run app:dev                          # desenvolvimento (tauri dev)
-npm run build                            # tsc + vite build
+pnpm install                             # também instala os hooks do husky (script prepare)
+pnpm app:dev                             # desenvolvimento (tauri dev)
+pnpm build                               # tsc + vite build
 cargo test -p quilltex-core -p quilltex-mcp
-npx biome check --write <arquivos>       # formata e lint (Biome)
-npm run commit                           # assistente de commit (commitizen)
+pnpm exec biome check --write <arquivos> # formata e lint (Biome)
+pnpm commit                              # assistente de commit (commitizen)
 ```
 
 ## Commits e releases
