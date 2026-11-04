@@ -2891,7 +2891,7 @@ dependencies = [
 
 [[package]]
 name = "quilltex"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2913,7 +2913,7 @@ dependencies = [
 
 [[package]]
 name = "quilltex-core"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -2933,7 +2933,7 @@ dependencies = [
 
 [[package]]
 name = "quilltex-mcp"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "quilltex-core",
  "serde",
