@@ -641,7 +641,12 @@ pub fn clone(ws: &Workspace, url: &str, project: &str) -> Result<()> {
     if dir.exists() {
         return Err(Error::AlreadyExists(project.into()));
     }
-    let target = dir.display().to_string();
+    // `canonicalize` yields `\\?\` paths on Windows, which git refuses as a clone target.
+    let shown = dir.display().to_string();
+    let target = match shown.strip_prefix(r"\\?\UNC\") {
+        Some(rest) => format!(r"\\{rest}"),
+        None => shown.strip_prefix(r"\\?\").unwrap_or(&shown).to_string(),
+    };
     let res = Git { dir: ws.root(), remote: true }.run(&["clone", "-q", "--", url, &target]);
     if let Err(e) = res {
         let _ = std::fs::remove_dir_all(&dir);
