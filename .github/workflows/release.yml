@@ -28,9 +28,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -40,7 +42,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - run: cargo test -p quilltex-core -p quilltex-mcp
       - run: node scripts/fetch-sidecars.mjs --target ${{ matrix.target }}
       - uses: tauri-apps/tauri-action@v0
