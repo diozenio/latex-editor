@@ -80,7 +80,6 @@ Ordene para que o histórico conte uma história coerente:
 - Letras minúsculas e sem ponto final.
 - Máximo de 72 caracteres na linha do subject.
 - Escopo obrigatório quando identificável: `tipo(escopo): descrição`. Descubra os escopos do repositório lendo o `CLAUDE.md`/`AGENTS.md` (se listarem escopos) e o histórico com `git log --oneline -n 30`, e prefira os escopos já usados ali (ex.: `auth`, `chat`, `db`, `ui`, `config`, `deps`).
-- **Neste projeto** o commitlint (`commitlint.config.js`) só aceita estes escopos: `app`, `core`, `mcp`, `ui`, `chat`, `deps`, `scripts`, `release`, `readme`, `config`. Use apenas eles; um escopo fora da lista faz o hook `commit-msg` rejeitar o commit.
 - Apenas o subject (sem corpo), a menos que a mudança realmente precise de explicação.
 - Não invente mudanças que não estão no diff.
 
