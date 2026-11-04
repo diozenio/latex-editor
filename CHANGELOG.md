@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/diozenio/latex-editor/compare/v1.1.0...v1.1.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **core:** accept the hidden top folder of linux tinytex archives ([f7c471a](https://github.com/diozenio/latex-editor/commit/f7c471a8fb7a3005c8942d4485cb9fb3f19155be))
+
 ## [1.1.0](https://github.com/diozenio/latex-editor/compare/v1.0.0...v1.1.0) (2026-11-04)
 
 
