@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowUp, Check, Loader2, Plus, Sparkles, Square, Wrench, X, AlertCircle, Terminal } from "lucide-react";
+import { ArrowUp, Check, Copy, Loader2, Plus, Sparkles, Square, Wrench, X, AlertCircle, Terminal } from "lucide-react";
 import { create } from "zustand";
 import { api, errorMessage } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
@@ -276,6 +276,9 @@ export function ChatPanel() {
                   <ToolCard key={i} part={p} />
                 ),
               )}
+              {m.role === "assistant" && !(running && m === chat.messages[chat.messages.length - 1]) && (
+                <CopyButton text={messageText(m)} />
+              )}
             </div>
           ))
         )}
@@ -362,6 +365,32 @@ const TOOL_LABELS: Record<string, string> = {
   git_push: "Pushed",
   git_init: "Initialized git",
 };
+
+function messageText(m: Msg): string {
+  return m.parts
+    .flatMap((p) => (p.kind === "text" ? [p.text] : []))
+    .join("\n\n")
+    .trim();
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!text) return null;
+  return (
+    <button
+      className="btn ghost sm copy-btn"
+      title={copied ? "Copied" : "Copy message"}
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+    </button>
+  );
+}
 
 function ToolCard({ part }: { part: Extract<Part, { kind: "tool" }> }) {
   const short = part.name.replace(/^mcp__folio__/, "");

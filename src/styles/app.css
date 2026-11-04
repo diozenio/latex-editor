@@ -1736,6 +1736,10 @@ body.tree-dragging * {
   overflow: auto;
   white-space: pre;
 }
+.msg .copy-btn {
+  align-self: flex-start;
+  padding: 0 6px;
+}
 .tool-card {
   display: flex;
   align-items: center;
