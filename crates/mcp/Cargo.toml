@@ -1,14 +1,14 @@
 [package]
-name = "folio-mcp"
+name = "quilltex-mcp"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "folio-mcp"
+name = "quilltex-mcp"
 path = "src/main.rs"
 
 [dependencies]
-folio-core.workspace = true
+quilltex-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

@@ -1,9 +1,9 @@
-//! `folio-mcp`: an MCP server (stdio, newline-delimited JSON-RPC) that lets
-//! Claude Code manage Folio projects. Every path goes through
-//! `folio_core::Workspace`, so nothing outside the projects folder is
+//! `quilltex-mcp`: an MCP server (stdio, newline-delimited JSON-RPC) that lets
+//! Claude Code manage QuillTex projects. Every path goes through
+//! `quilltex_core::Workspace`, so nothing outside the projects folder is
 //! reachable.
 //!
-//! Flags: --root <dir> --tectonic <bin> --tectonic-cache <dir>
+//! Flags: --root <dir> --tectonic <bin> --tectonic-cache <dir> --texlive <dir>
 
 mod tools;
 
@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 
-use folio_core::{compile::Toolchain, Workspace};
+use quilltex_core::{compile::Toolchain, Workspace};
 
 pub struct Ctx {
     pub ws: Workspace,
@@ -29,7 +29,7 @@ fn main() {
     let ws = match Workspace::new(&root) {
         Ok(ws) => ws,
         Err(e) => {
-            eprintln!("folio-mcp: cannot open {}: {e}", root.display());
+            eprintln!("quilltex-mcp: cannot open {}: {e}", root.display());
             std::process::exit(1);
         }
     };
@@ -45,7 +45,7 @@ fn main() {
         toolchain: Toolchain {
             tectonic,
             tectonic_cache: arg("--tectonic-cache").map(PathBuf::from),
-            system_tex_bin: folio_core::compile::detect_system_tex(),
+            texlive: arg("--texlive").map(PathBuf::from),
         },
     };
     serve(&ctx, std::io::stdin().lock(), std::io::stdout().lock());
@@ -77,7 +77,7 @@ fn handle(ctx: &Ctx, msg: &Value) -> Option<Value> {
         "initialize" => ok(id, json!({
             "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or("2025-06-18"),
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "folio", "version": env!("CARGO_PKG_VERSION") },
+            "serverInfo": { "name": "quilltex", "version": env!("CARGO_PKG_VERSION") },
             "instructions": INSTRUCTIONS,
         })),
         "ping" => ok(id, json!({})),
@@ -104,7 +104,7 @@ fn error(id: Value, code: i32, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
-const INSTRUCTIONS: &str = "Folio is a local LaTeX editor. Each project is a folder of plain files. \
+const INSTRUCTIONS: &str = "QuillTex is a local LaTeX editor. Each project is a folder of plain files. \
 Use these tools to list, create, edit and compile projects. Paths are relative to the project root. \
 Prefer edit_file for small changes and always compile after editing to check for errors. \
 Never ask to access files outside the projects folder; it is not possible.";
@@ -141,7 +141,7 @@ mod tests {
             call(9, "list_projects", json!({})),
         ]);
         assert_eq!(out.len(), 9, "notification must not get a response");
-        assert_eq!(out[0]["result"]["serverInfo"]["name"], "folio");
+        assert_eq!(out[0]["result"]["serverInfo"]["name"], "quilltex");
         assert!(out[1]["result"]["tools"].as_array().unwrap().len() > 10);
         assert_eq!(out[5]["result"]["content"][0]["text"], "Hi");
         assert_eq!(out[6]["result"]["isError"], true);

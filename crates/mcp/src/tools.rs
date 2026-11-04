@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-use folio_core::{archive, compile, files, git, project, templates};
+use quilltex_core::{archive, compile, files, git, project, templates};
 
 use crate::Ctx;
 
@@ -20,7 +20,7 @@ fn to_json<T: serde::Serialize>(v: &T) -> R {
 
 pub fn call(ctx: &Ctx, name: &str, a: &Value) -> R {
     let ws = &ctx.ws;
-    let e = |e: folio_core::Error| e.to_string();
+    let e = |e: quilltex_core::Error| e.to_string();
     match name {
         "list_projects" => to_json(&project::list(ws).map_err(e)?),
         "create_project" => {
@@ -174,7 +174,7 @@ pub fn definitions() -> Vec<Value> {
     let p = json!({ "type": "string", "description": "Project name (folder name)" });
     let path = json!({ "type": "string", "description": "Path relative to the project root, forward slashes" });
     vec![
-        tool("list_projects", "List all Folio projects with their main file and last modification.", json!({}), &[]),
+        tool("list_projects", "List all QuillTex projects with their main file and last modification.", json!({}), &[]),
         tool("list_templates", "List available project templates.", json!({}), &[]),
         tool("create_project", "Create a new project from a template (blank, article, report, beamer, letter, cv).",
             json!({ "name": { "type": "string" }, "template": { "type": "string" } }), &["name"]),
