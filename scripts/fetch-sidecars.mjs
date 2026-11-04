@@ -74,11 +74,25 @@ function findFile(dir, name) {
   return null;
 }
 
-async function download(url, dest) {
+// curl rather than fetch: CI runners drop large release downloads now and then
+// ("other side closed"), and curl retries them.
+function download(url, dest) {
   console.log(`↓ ${url}`);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`download failed: ${res.status}`);
-  writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+  execFileSync(
+    "curl",
+    [
+      "-fsSL",
+      "--retry",
+      "5",
+      "--retry-all-errors",
+      "--retry-delay",
+      "5",
+      "-o",
+      dest,
+      url,
+    ],
+    { stdio: "inherit" },
+  );
 }
 
 // Same names as `asset()` in crates/core/src/texlive.rs.
@@ -117,7 +131,7 @@ async function prepareEngines() {
   mkdirSync(work, { recursive: true });
   const asset = tinytexAsset(target);
   const archive = join(work, asset);
-  await download(
+  download(
     `https://github.com/rstudio/tinytex-releases/releases/download/v${TINYTEX_VERSION}/${asset}`,
     archive,
   );
@@ -177,7 +191,7 @@ async function fetchTectonic() {
   const work = join(tmpdir(), `quilltex-tectonic-${Date.now()}`);
   mkdirSync(work, { recursive: true });
   const archive = join(work, asset);
-  await download(url, archive);
+  download(url, archive);
   // bsdtar (macOS, Windows 10+, most Linux) handles both .tar.gz and .zip.
   execFileSync("tar", ["-xf", archive, "-C", work]);
   const bin = findFile(work, `tectonic${ext}`);
