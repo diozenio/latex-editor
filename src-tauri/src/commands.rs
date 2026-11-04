@@ -282,8 +282,6 @@ pub fn git_init(state: State<AppState>, project: String) -> CmdResult<()> {
     project::ensure_scaffold(&ws, &project).map_err(err)?;
     let (name, email) = identity(&state, &project);
     git::init(&ws, &project, &name, &email).map_err(err)?;
-    git::stage_all(&ws, &project).map_err(err)?;
-    git::commit(&ws, &project, "Initial commit").map_err(err)?;
     Ok(())
 }
 
@@ -320,6 +318,52 @@ pub fn git_commit(app: AppHandle, state: State<AppState>, project: String, messa
 #[tauri::command]
 pub fn git_log(state: State<AppState>, project: String) -> CmdResult<Vec<git::Commit>> {
     git::log(&state.ws(), &project, 100).map_err(err)
+}
+
+#[tauri::command]
+pub fn git_commit_files(state: State<AppState>, project: String, id: String) -> CmdResult<Vec<git::CommitFile>> {
+    git::commit_files(&state.ws(), &project, &id).map_err(err)
+}
+
+#[tauri::command]
+pub fn git_commit_diff(state: State<AppState>, project: String, id: String, path: String) -> CmdResult<String> {
+    git::commit_diff(&state.ws(), &project, &id, &path).map_err(err)
+}
+
+#[tauri::command]
+pub fn git_restore_version(app: AppHandle, state: State<AppState>, project: String, id: String) -> CmdResult<String> {
+    let ws = state.ws();
+    let (name, email) = identity(&state, &project);
+    let _ = git::set_identity_for(&ws, &project, &name, &email);
+    let out = git::restore_version(&ws, &project, &id).map_err(err)?;
+    crate::sync::emit_status(&app, &ws, &project, None);
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn git_revert_commit(app: AppHandle, state: State<AppState>, project: String, id: String) -> CmdResult<String> {
+    let ws = state.ws();
+    let (name, email) = identity(&state, &project);
+    let _ = git::set_identity_for(&ws, &project, &name, &email);
+    let out = git::revert_commit(&ws, &project, &id).map_err(err)?;
+    crate::sync::emit_status(&app, &ws, &project, None);
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn git_reset_to(app: AppHandle, state: State<AppState>, project: String, id: String) -> CmdResult<()> {
+    let ws = state.ws();
+    git::reset_to(&ws, &project, &id).map_err(err)?;
+    crate::sync::emit_status(&app, &ws, &project, None);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn git_delete_commit(app: AppHandle, state: State<AppState>, project: String, id: String) -> CmdResult<()> {
+    let ws = state.ws();
+    git::delete_commit(&ws, &project, &id).map_err(err)?;
+    crate::sync::emit_status(&app, &ws, &project, None);
+    Ok(())
 }
 
 #[tauri::command]

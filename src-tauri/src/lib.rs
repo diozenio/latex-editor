@@ -96,7 +96,13 @@ pub fn run() {
                     let _ = window_vibrancy::apply_acrylic(&window, Some((18, 18, 18, 125)));
                 }
             }
-            let _ = window;
+            // Fill the monitor's work area (below the menu bar, clear of the Dock)
+            // explicitly: `maximized` in the config leaves the window offset.
+            if let Ok(Some(monitor)) = window.current_monitor() {
+                let area = monitor.work_area();
+                let _ = window.set_position(tauri::PhysicalPosition::new(area.position.x, area.position.y));
+                let _ = window.set_size(tauri::PhysicalSize::new(area.size.width, area.size.height));
+            }
 
             watcher::restart(&handle);
             sync::start(handle);
@@ -140,6 +146,12 @@ pub fn run() {
             commands::git_commit,
             commands::git_log,
             commands::git_diff,
+            commands::git_commit_files,
+            commands::git_commit_diff,
+            commands::git_restore_version,
+            commands::git_revert_commit,
+            commands::git_reset_to,
+            commands::git_delete_commit,
             commands::git_branches,
             commands::git_create_branch,
             commands::git_checkout,
