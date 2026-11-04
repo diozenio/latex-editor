@@ -34,8 +34,10 @@ pub struct AppInfo {
     platform: String,
     projects_root: String,
     tectonic: bool,
-    /// The private TeX Live is downloaded and ready.
+    /// The private TeX Live is set up and ready.
     texlive: bool,
+    /// TeX Live ships inside the app, so setting it up needs no download.
+    texlive_bundled: bool,
     claude: Option<String>,
     gh_installed: bool,
     github_connected: bool,
@@ -51,6 +53,7 @@ pub fn app_info(app: AppHandle, state: State<AppState>) -> AppInfo {
         projects_root: state.ws().root().display().to_string(),
         tectonic: tc.tectonic.is_some(),
         texlive: tc.texlive.as_deref().is_some_and(texlive::is_installed),
+        texlive_bundled: tc.texlive_archive.is_some(),
         claude: crate::env::find_claude(&s.claude_path).map(|p| p.display().to_string()),
         gh_installed: gh::find().is_some(),
         github_connected: gh::logged_in(),
@@ -219,15 +222,16 @@ pub async fn compile_project(app: AppHandle, state: State<'_, AppState>, project
     .await
 }
 
-/// Download TeX Live ahead of the first compile that needs it.
+/// Set up TeX Live ahead of the first compile that needs it.
 #[tauri::command]
 pub async fn install_texlive(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
-    let root = state.toolchain.read().unwrap().texlive.clone().ok_or("TeX Live is not available")?;
+    let tc = state.toolchain.read().unwrap().clone();
+    let root = tc.texlive.ok_or("TeX Live is not available")?;
     blocking(move || {
         let status = |message: &str| {
             let _ = app.emit("texlive-status", message);
         };
-        texlive::install(&root, &status).map_err(err)
+        texlive::install(&root, tc.texlive_archive.as_deref(), &status).map_err(err)
     })
     .await
 }

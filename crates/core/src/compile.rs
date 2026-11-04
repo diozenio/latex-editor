@@ -14,7 +14,7 @@ const TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_INSTALLS: usize = 60;
 
 /// Where to find TeX. Both engines belong to the app: Tectonic ships as a
-/// sidecar, and TeX Live is downloaded into the app's data dir on first use.
+/// sidecar, and TeX Live is unpacked (or downloaded) into the app's data dir.
 /// A TeX installed on the computer is never used.
 #[derive(Debug, Clone, Default)]
 pub struct Toolchain {
@@ -23,6 +23,29 @@ pub struct Toolchain {
     pub tectonic_cache: Option<PathBuf>,
     /// Root of the app's private TeX Live (may not be installed yet).
     pub texlive: Option<PathBuf>,
+    /// TeX Live archive shipped with the app; without it TeX Live is downloaded.
+    pub texlive_archive: Option<PathBuf>,
+}
+
+/// Copies a Tectonic cache shipped with the app (the files the project
+/// templates need) into `cache`, so new projects compile without the network.
+/// Files already there are kept; each copy lands under a temporary name and is
+/// renamed into place, so a compile running meanwhile never sees half a file.
+pub fn seed_tectonic_cache(seed: &Path, cache: &Path) -> Result<()> {
+    for entry in walkdir::WalkDir::new(seed).into_iter().flatten().filter(|e| e.file_type().is_file()) {
+        let rel = entry.path().strip_prefix(seed).unwrap();
+        let dest = cache.join(rel);
+        if dest.exists() {
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let partial = dest.with_file_name(format!("{}.seeding", rel.file_name().unwrap().to_string_lossy()));
+        std::fs::copy(entry.path(), &partial)?;
+        std::fs::rename(&partial, &dest)?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -92,7 +115,7 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
             let root = tc.texlive.clone().ok_or_else(|| Error::Compile("TeX Live is not available".into()))?;
             if !texlive::is_installed(&root) {
                 status("Setting up TeX Live (first use)…");
-                texlive::install(&root, status)?;
+                texlive::install(&root, tc.texlive_archive.as_deref(), status)?;
             }
             let rc = texlive::latexmkrc(&root)?;
             let flag = match engine {
@@ -112,9 +135,20 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
                     .arg(&meta.main_file);
                 Ok(c)
             };
-            // Each failed run names the next missing file; install it and go again.
             let mut notes = String::new();
             let mut tried: Vec<String> = Vec::new();
+            let note = |notes: &mut String, installed: &[String]| {
+                for p in installed {
+                    notes.push_str(&format!("QuillTex: installed TeX package `{p}`\n"));
+                }
+            };
+            // What the sources name goes in up front, in one batch…
+            let installed = texlive::install_for_project(&root, &dir, &mut tried, status);
+            note(&mut notes, &installed);
+            if !installed.is_empty() {
+                status("Compiling…");
+            }
+            // …then each failed run names the next missing file; install it and go again.
             let mut outcome = run(latexmk(false)?, &dir)?;
             while !outcome.0 && tried.len() < MAX_INSTALLS {
                 let log = std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
@@ -138,13 +172,17 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
                     }
                 };
                 let Some(package) = package.filter(|p| !tried.contains(p)) else { break };
-                status(&format!("Installing TeX package {package}…"));
-                tried.push(package.clone());
-                if let Err(e) = texlive::install_packages(&root, &[&package]) {
-                    notes.push_str(&format!("QuillTex: could not install TeX package `{package}`: {e}\n"));
-                    break;
+                let files = match &missing {
+                    texlive::Missing::File(f) => vec![f.rsplit('/').next().unwrap_or(f).to_string()],
+                    _ => Vec::new(),
+                };
+                match texlive::install_with_requirements(&root, vec![package.clone()], files, &mut tried, status) {
+                    Ok(installed) => note(&mut notes, &installed),
+                    Err(e) => {
+                        notes.push_str(&format!("QuillTex: could not install TeX package `{package}`: {e}\n"));
+                        break;
+                    }
                 }
-                notes.push_str(&format!("QuillTex: installed TeX package `{package}`\n"));
                 status("Compiling…");
                 outcome = run(latexmk(true)?, &dir)?;
             }

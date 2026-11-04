@@ -4,11 +4,14 @@
 //! child processes see it, with an environment built here.
 //!
 //! TinyTeX ships a small base; whatever else a document needs is installed
-//! with tlmgr the first time a compile reports it missing.
+//! with tlmgr: up front for what the sources name, then whenever a compile
+//! reports something missing.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 use crate::compile::hide_console;
 use crate::{Error, Result};
@@ -17,6 +20,12 @@ const TINYTEX_VERSION: &str = "2026.11";
 /// Installed right away: helpers latexmk calls for bibliographies, indexes and glossaries.
 const BASE_PACKAGES: &[&str] = &["biber", "makeindex", "glossaries"];
 const READY_MARKER: &str = ".ready";
+/// Left next to the TeX Live folder when the user removes it, so the bundled copy is not set up again on its own.
+const REMOVED_MARKER: &str = "texlive.removed";
+/// Rounds of "install, then install what those packages load" per call.
+const DEPENDENCY_ROUNDS: usize = 4;
+/// Classes and packages read while following what a document loads.
+const MAX_SCANNED: usize = 1000;
 /// Package from the TeX Live of a given year, once that year's repository is frozen.
 const HISTORIC_REPO: &str = "https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/{year}/tlnet-final";
 
@@ -94,25 +103,36 @@ fn has_tex(dir: &Path) -> bool {
     ["kpsewhich", "latex", "tex", "tlmgr"].iter().any(|b| dir.join(exe(b)).is_file())
 }
 
-/// Download and set up TinyTeX into `root`. Reports progress as short messages.
-pub fn install(root: &Path, status: &dyn Fn(&str)) -> Result<()> {
+/// Set up TinyTeX into `root`, from `bundled` (an archive shipped with the app)
+/// when given, otherwise downloaded. Reports progress as short messages.
+pub fn install(root: &Path, bundled: Option<&Path>, status: &dyn Fn(&str)) -> Result<()> {
     let _guard = TLMGR.lock().unwrap_or_else(|e| e.into_inner());
     if is_installed(root) {
         return Ok(());
     }
     let parent = root.parent().ok_or_else(|| Error::Other("invalid TeX Live folder".into()))?;
     std::fs::create_dir_all(parent)?;
+    let _ = std::fs::remove_file(parent.join(REMOVED_MARKER));
     let stage = parent.join("texlive.partial");
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage)?;
     let result = (|| -> Result<()> {
-        let asset = asset()?;
-        let archive = stage.join(&asset);
-        let url = format!("https://github.com/rstudio/tinytex-releases/releases/download/v{TINYTEX_VERSION}/{asset}");
-        download(&url, &archive, status)?;
-        status("Unpacking TeX Live…");
-        unpack(&archive, &stage)?;
-        let _ = std::fs::remove_file(&archive);
+        match bundled.filter(|a| a.is_file()) {
+            Some(archive) => {
+                status("Unpacking TeX Live…");
+                unpack(archive, &stage)?;
+            }
+            None => {
+                let asset = asset()?;
+                let archive = stage.join(&asset);
+                let url =
+                    format!("https://github.com/rstudio/tinytex-releases/releases/download/v{TINYTEX_VERSION}/{asset}");
+                download(&url, &archive, status)?;
+                status("Unpacking TeX Live…");
+                unpack(&archive, &stage)?;
+                let _ = std::fs::remove_file(&archive);
+            }
+        }
         let unpacked = stage.join("TinyTeX");
         if !unpacked.join("bin").is_dir() {
             return Err(Error::Other("unexpected TeX Live archive layout".into()));
@@ -124,6 +144,12 @@ pub fn install(root: &Path, status: &dyn Fn(&str)) -> Result<()> {
     let _ = std::fs::remove_dir_all(&stage);
     result?;
 
+    // The bundled tree was set up when the app was built: only the font
+    // configuration, which records where the tree lives, is redone here.
+    if root.join(READY_MARKER).is_file() {
+        let _ = tlmgr(root, &["postaction", "install", "script", "xetex"]);
+        return Ok(());
+    }
     status("Setting up TeX Live…");
     tlmgr(root, &["update", "--self"]).map_err(|out| Error::Compile(last_lines(&out, 6)))?;
     let _ = tlmgr(root, &["postaction", "install", "script", "xetex"]);
@@ -138,7 +164,15 @@ pub fn remove(root: &Path) -> Result<()> {
     if root.exists() {
         std::fs::remove_dir_all(root)?;
     }
+    if let Some(parent) = root.parent() {
+        let _ = std::fs::write(parent.join(REMOVED_MARKER), "");
+    }
     Ok(())
+}
+
+/// Whether the user removed TeX Live (and so does not want it set up unasked).
+pub fn was_removed(root: &Path) -> bool {
+    root.parent().is_some_and(|p| p.join(REMOVED_MARKER).is_file())
 }
 
 /// Install TeX Live packages (tlmgr names).
@@ -168,8 +202,228 @@ fn install_locked(root: &Path, packages: &[&str]) -> Result<()> {
     Err(Error::Compile(format!("could not install {}", packages.join(", "))))
 }
 
-/// Which package ships `file` (e.g. `abntex2.cls`), looked up in the online catalogue.
+/// Installs `packages` along with what loading `files` (e.g. `beamer.cls`)
+/// takes: starting from those files, it follows the classes and packages each
+/// one loads through the tree, and installs whatever is missing in one tlmgr
+/// call per round. Packages in `tried` are skipped, and everything attempted
+/// is added to it. Returns what was installed; fails only when the first
+/// tlmgr call does.
+pub fn install_with_requirements(
+    root: &Path,
+    mut packages: Vec<String>,
+    files: Vec<String>,
+    tried: &mut Vec<String>,
+    status: &dyn Fn(&str),
+) -> Result<Vec<String>> {
+    let mut installed = Vec::new();
+    let mut queue = files;
+    let mut seen = HashSet::new();
+    for _ in 0..DEPENDENCY_ROUNDS {
+        packages.sort();
+        packages.dedup();
+        packages.retain(|p| !tried.contains(p));
+        if !packages.is_empty() {
+            status(&match packages.as_slice() {
+                [one] => format!("Installing TeX package {one}…"),
+                many => format!("Installing TeX packages {}…", many.join(", ")),
+            });
+            tried.extend(packages.iter().cloned());
+            let names: Vec<&str> = packages.iter().map(String::as_str).collect();
+            match install_packages(root, &names) {
+                Ok(()) => installed.append(&mut packages),
+                Err(e) if installed.is_empty() => return Err(e),
+                // A later failure is left to the compile, which reports what it really misses.
+                Err(_) => break,
+            }
+        }
+        // Walk what the files load; the ones the tree lacks are this round's catch.
+        let db = local_db(root);
+        let paths = installed_paths(&db);
+        let mut missing = Vec::new();
+        while let Some(file) = queue.pop() {
+            if seen.len() >= MAX_SCANNED || !seen.insert(file.clone()) {
+                continue;
+            }
+            match paths.get(&file) {
+                Some(path) => {
+                    if let Ok(source) = std::fs::read_to_string(root.join(path)) {
+                        queue.extend(requirements(&source));
+                    }
+                }
+                None => {
+                    // Looked at again once its package is in.
+                    seen.remove(&file);
+                    missing.push(file);
+                }
+            }
+        }
+        packages = packages_for(root, &paths, &missing);
+        if packages.iter().all(|p| tried.contains(p)) {
+            break;
+        }
+        queue = missing;
+    }
+    Ok(installed)
+}
+
+/// Installs what the project's sources name (classes, packages, themes, BibTeX
+/// styles) and the tree lacks, before the first compile has to discover each
+/// one. Best effort: the compile loop still catches anything missed here.
+pub fn install_for_project(root: &Path, project: &Path, tried: &mut Vec<String>, status: &dyn Fn(&str)) -> Vec<String> {
+    let mut own = HashSet::new();
+    let mut wanted = Vec::new();
+    let entries = walkdir::WalkDir::new(project)
+        .into_iter()
+        .filter_entry(|e| !crate::project::is_internal(e.path(), project))
+        .flatten()
+        .filter(|e| e.file_type().is_file());
+    for entry in entries {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or_default();
+        if matches!(ext, "tex" | "ltx" | "sty" | "cls") && entry.metadata().is_ok_and(|m| m.len() < 4 << 20) {
+            if let Ok(source) = std::fs::read_to_string(entry.path()) {
+                wanted.extend(requirements(&source));
+            }
+        }
+        own.insert(name);
+    }
+    wanted.retain(|f| !own.contains(f));
+    install_with_requirements(root, Vec::new(), wanted, tried, status).unwrap_or_default()
+}
+
+/// Files a TeX source loads by name: classes, packages, beamer themes and BibTeX
+/// styles (`amsmath.sty`, `beamerthememetropolis.sty`, `plain.bst`…).
+pub fn requirements(source: &str) -> Vec<String> {
+    use regex::Regex;
+    use std::sync::OnceLock;
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        Regex::new(
+            r"\\(usepackage|RequirePackage(?:WithOptions)?|documentclass|LoadClass(?:WithOptions)?|use(color|font|inner|outer)?theme|bibliographystyle)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}",
+        )
+        .unwrap()
+    });
+    let text: Vec<&str> = source.lines().map(strip_comment).collect();
+    let text = text.join("\n");
+    let mut out = Vec::new();
+    for c in re.captures_iter(&text) {
+        let command = &c[1];
+        for name in c[3].split(',').map(str::trim) {
+            if name.is_empty() || !name.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_') {
+                continue;
+            }
+            out.push(match command {
+                "documentclass" | "LoadClass" | "LoadClassWithOptions" => format!("{name}.cls"),
+                "bibliographystyle" => format!("{name}.bst"),
+                _ if command.ends_with("theme") => {
+                    format!("beamer{}theme{name}.sty", c.get(2).map_or("", |m| m.as_str()))
+                }
+                _ => format!("{name}.sty"),
+            });
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn strip_comment(line: &str) -> &str {
+    let bytes = line.as_bytes();
+    match (0..bytes.len()).find(|&i| bytes[i] == b'%' && (i == 0 || bytes[i - 1] != b'\\')) {
+        Some(i) => &line[..i],
+        None => line,
+    }
+}
+
+/// The installed packages' database.
+fn local_db(root: &Path) -> String {
+    std::fs::read_to_string(root.join("tlpkg").join("texlive.tlpdb")).unwrap_or_default()
+}
+
+/// Calls `f(package, path)` for every run file listed in a tlpdb. Paths are as
+/// written there: `texmf-dist/…` in the local one, `RELOC/…` in the catalogue.
+fn runfiles(tlpdb: &str, mut f: impl FnMut(&str, &str)) {
+    let (mut package, mut in_runfiles) = ("", false);
+    for line in tlpdb.lines() {
+        if let Some(path) = line.strip_prefix(' ') {
+            if in_runfiles {
+                f(package, path);
+            }
+        } else {
+            in_runfiles = line.starts_with("runfiles");
+            if let Some(name) = line.strip_prefix("name ") {
+                package = name;
+            }
+        }
+    }
+}
+
+/// File name → path (under the root) of everything the local tree (`db`) has.
+fn installed_paths(db: &str) -> HashMap<String, String> {
+    let mut paths = HashMap::new();
+    runfiles(db, |_, path| {
+        paths.insert(path.rsplit('/').next().unwrap_or(path).to_string(), path.to_string());
+    });
+    paths
+}
+
+/// Packages that ship whichever of `files` the local tree lacks. Files the
+/// catalogue does not know (the project's own, typos) are left out.
+fn packages_for(root: &Path, installed: &HashMap<String, String>, files: &[String]) -> Vec<String> {
+    let missing: Vec<&String> = files.iter().filter(|f| !installed.contains_key(*f)).collect();
+    if missing.is_empty() {
+        return Vec::new();
+    }
+    let Some(catalogue) = catalogue(root) else { return Vec::new() };
+    let mut out: Vec<String> = missing.iter().filter_map(|f| catalogue.get(*f).cloned()).collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// File name → package for all of TeX Live, read from the copy of the remote
+/// database tlmgr keeps after talking to the repository
+/// (`tlpkg/texlive.tlpdb.main.<hash>`), so lookups need no network.
+fn catalogue(root: &Path) -> Option<Arc<HashMap<String, String>>> {
+    type Cached = (PathBuf, SystemTime, Arc<HashMap<String, String>>);
+    static CACHE: Mutex<Option<Cached>> = Mutex::new(None);
+    let (path, modified) = std::fs::read_dir(root.join("tlpkg"))
+        .ok()?
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with("texlive.tlpdb.main."))
+        .filter_map(|e| Some((e.path(), e.metadata().ok()?.modified().ok()?)))
+        .max_by_key(|(_, m)| *m)?;
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((p, m, map)) = cache.as_ref() {
+        if *p == path && *m == modified {
+            return Some(map.clone());
+        }
+    }
+    let text = std::fs::read_to_string(&path).ok()?;
+    let mut map = HashMap::new();
+    runfiles(&text, |package, path| {
+        let file = path.rsplit('/').next().unwrap_or(path);
+        map.entry(file.to_string()).or_insert_with(|| package.to_string());
+    });
+    let map = Arc::new(map);
+    *cache = Some((path, modified, map.clone()));
+    Some(map)
+}
+
+/// Uninstall TeX Live packages (tlmgr names).
+pub fn remove_packages(root: &Path, packages: &[&str]) -> Result<()> {
+    let _guard = TLMGR.lock().unwrap_or_else(|e| e.into_inner());
+    let mut args = vec!["remove"];
+    args.extend(packages);
+    tlmgr(root, &args).map(|_| ()).map_err(|out| Error::Compile(last_lines(&out, 6)))
+}
+
+/// Which package ships `file` (e.g. `abntex2.cls`): from the local catalogue
+/// when there is one, otherwise asked of the online repository.
 pub fn package_for_file(root: &Path, file: &str) -> Option<String> {
+    if let Some(package) = catalogue(root).and_then(|c| c.get(file).cloned()) {
+        return Some(package);
+    }
     let _guard = TLMGR.lock().unwrap_or_else(|e| e.into_inner());
     let out = tlmgr(root, &["search", "--global", "--file", &format!("/{file}")]).ok()?;
     // "pkg:" lines, each followed by indented paths.
@@ -357,8 +611,9 @@ fn download(url: &str, dest: &Path, status: &dyn Fn(&str)) -> Result<()> {
 }
 
 fn unpack(archive: &Path, into: &Path) -> Result<()> {
-    // Windows bundles are self-extracting 7-Zip archives; elsewhere system tar handles .xz.
-    let mut cmd = if cfg!(windows) {
+    // Windows downloads are self-extracting 7-Zip archives; system tar handles
+    // everything else (.tar.xz, and the .zip the app bundles on Windows).
+    let mut cmd = if archive.extension().is_some_and(|e| e == "exe") {
         let mut c = Command::new(archive);
         c.arg("-y");
         c
@@ -416,5 +671,48 @@ mod tests {
 (glossaries)                Please check on CTAN for a bundle called\n\
 (glossaries)                `glossaries-english' or similar.\n";
         assert_eq!(find_optional(log), ["glossaries-english", "glossaries-portuges", "hyphen-portuguese"]);
+    }
+
+    #[test]
+    fn finds_what_sources_load() {
+        let source = r"\documentclass[12pt]{abntex2}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb}
+% \usepackage{commented}
+\usepackage[
+  margin=2cm,
+]{geometry}
+\RequirePackage{xcolor}[2020/01/01]
+\usepackage{\mypkg}
+\usetheme{metropolis} \usecolortheme{beaver}
+\bibliographystyle{abntex2-alf}
+50\% \usepackage{lipsum}";
+        assert_eq!(
+            requirements(source),
+            [
+                "abntex2-alf.bst",
+                "abntex2.cls",
+                "amsmath.sty",
+                "amssymb.sty",
+                "beamercolorthemebeaver.sty",
+                "beamerthememetropolis.sty",
+                "geometry.sty",
+                "inputenc.sty",
+                "lipsum.sty",
+                "xcolor.sty",
+            ]
+        );
+    }
+
+    #[test]
+    fn reads_runfiles() {
+        let db = "name foo\ncategory Package\ndocfiles size=1\n RELOC/doc/foo/README details=\"Readme\"\n\
+runfiles size=2\n RELOC/tex/latex/foo/foo.sty\n RELOC/tex/latex/foo/foo-extra.sty\n\nname bar\nrunfiles size=1\n RELOC/tex/latex/bar/bar.cls\n";
+        let mut seen = Vec::new();
+        runfiles(db, |p, f| seen.push(format!("{p}:{f}")));
+        assert_eq!(
+            seen,
+            ["foo:RELOC/tex/latex/foo/foo.sty", "foo:RELOC/tex/latex/foo/foo-extra.sty", "bar:RELOC/tex/latex/bar/bar.cls"]
+        );
     }
 }

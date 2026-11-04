@@ -3,7 +3,7 @@
 //! `quilltex_core::Workspace`, so nothing outside the projects folder is
 //! reachable.
 //!
-//! Flags: --root <dir> --tectonic <bin> --tectonic-cache <dir> --texlive <dir>
+//! Flags: --root <dir> --tectonic <bin> --tectonic-cache <dir> --texlive <dir> --texlive-archive <file>
 
 mod tools;
 
@@ -46,6 +46,7 @@ fn main() {
             tectonic,
             tectonic_cache: arg("--tectonic-cache").map(PathBuf::from),
             texlive: arg("--texlive").map(PathBuf::from),
+            texlive_archive: arg("--texlive-archive").map(PathBuf::from),
         },
     };
     serve(&ctx, std::io::stdin().lock(), std::io::stdout().lock());

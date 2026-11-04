@@ -63,6 +63,8 @@ pub struct AppState {
     pub toolchain: RwLock<Toolchain>,
     /// Directory holding the bundled sidecars (next to the main executable).
     pub bin_dir: PathBuf,
+    /// Tectonic cache shipped with the app, copied into the real one at startup.
+    pub tectonic_seed: Option<PathBuf>,
 }
 
 impl AppState {
@@ -77,10 +79,12 @@ impl AppState {
             .unwrap_or_default();
         let ws = Workspace::new(&settings.projects_root)?;
         let bin_dir = std::env::current_exe()?.parent().unwrap().to_path_buf();
+        let resources = app.path().resource_dir().ok();
         let toolchain = Toolchain {
             tectonic: Some(bin_dir.join(exe("tectonic"))).filter(|p| p.is_file()),
             tectonic_cache: Some(cache_dir.join("tectonic")),
             texlive: Some(texlive_dir(app)?),
+            texlive_archive: resources.as_deref().and_then(bundled_texlive),
         };
         Ok(Self {
             ws: RwLock::new(ws),
@@ -88,6 +92,7 @@ impl AppState {
             config_dir,
             toolchain: RwLock::new(toolchain),
             bin_dir,
+            tectonic_seed: resources.map(|r| r.join("tectonic-cache")).filter(|p| p.is_dir()),
         })
     }
 
@@ -122,6 +127,9 @@ impl AppState {
         if let Some(t) = &tc.texlive {
             args.extend(["--texlive".into(), t.display().to_string()]);
         }
+        if let Some(a) = &tc.texlive_archive {
+            args.extend(["--texlive-archive".into(), a.display().to_string()]);
+        }
         args
     }
 }
@@ -137,6 +145,15 @@ fn texlive_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
         }
     }
     Ok(dir)
+}
+
+/// The TinyTeX archive `scripts/fetch-sidecars.mjs` puts in the app's resources.
+fn bundled_texlive(resources: &std::path::Path) -> Option<PathBuf> {
+    std::fs::read_dir(resources.join("texlive"))
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("TinyTeX")))
 }
 
 pub fn exe(name: &str) -> String {
