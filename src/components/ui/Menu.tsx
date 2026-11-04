@@ -9,6 +9,8 @@ export interface MenuEntry {
   danger?: boolean;
   disabled?: boolean;
   onSelect?: () => void;
+  /** Icon button revealed on hover; clicking it does not trigger onSelect. */
+  action?: { icon: ReactNode; label: string; danger?: boolean; onClick: () => void };
   separator?: boolean;
   heading?: string;
 }
@@ -27,6 +29,23 @@ function entries<T extends typeof DM | typeof CM>(M: T, items: MenuEntry[]) {
         {it.icon}
         <span>{it.label}</span>
         {it.right && <span className="right">{it.right}</span>}
+        {it.action && (
+          <button
+            type="button"
+            className={`menu-action${it.action.danger ? " danger" : ""}`}
+            title={it.action.label}
+            aria-label={it.action.label}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              it.action!.onClick();
+            }}
+          >
+            {it.action.icon}
+          </button>
+        )}
       </M.Item>
     );
   });
