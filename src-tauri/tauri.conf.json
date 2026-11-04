@@ -54,6 +54,10 @@
       "binaries/tectonic",
       "binaries/quilltex-mcp"
     ],
+    "resources": {
+      "resources/tectonic-cache": "tectonic-cache",
+      "resources/texlive": "texlive"
+    },
     "category": "Productivity",
     "shortDescription": "Local-first LaTeX editor",
     "macOS": {

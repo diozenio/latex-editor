@@ -4,3 +4,4 @@ target/
 src-tauri/binaries/
 src-tauri/gen/
 .DS_Store
+src-tauri/resources/
