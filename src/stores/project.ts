@@ -23,6 +23,8 @@ export function tabKind(path: string): TabKind {
 
 interface ProjectState {
   project: ProjectSummary | null;
+  /** Bumped by `load`; a rename keeps it, so views can tell a rename from a switch. */
+  session: number;
   tree: FileNode[];
   tabs: string[];
   active: string | null;
@@ -36,6 +38,8 @@ interface ProjectState {
   cursorLine: number;
 
   load: (name: string) => Promise<void>;
+  /** Follow a project renamed elsewhere (dialog, assistant, Finder) without reloading it. */
+  followRename: (from: string, to: string) => Promise<void>;
   unload: () => void;
   refreshTree: () => Promise<void>;
   refreshGit: () => Promise<void>;
@@ -66,9 +70,22 @@ const writeChains = new Map<string, Promise<void>>();
 const AUTOSAVE_MS = 250;
 let compileTimer: ReturnType<typeof setTimeout> | undefined;
 let compileQueued = false;
+const renameListeners = new Set<(from: string, to: string) => void>();
+
+export function onProjectRenamed(fn: (from: string, to: string) => void) {
+  renameListeners.add(fn);
+}
+
+export function projectExists(name: string) {
+  return api.projectSummary(name).then(
+    () => true,
+    () => false,
+  );
+}
 
 export const useProject = create<ProjectState>((set, get) => ({
   project: null,
+  session: 0,
   tree: [],
   tabs: [],
   active: null,
@@ -87,6 +104,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       const project = await api.projectSummary(name);
       set({
         project,
+        session: get().session + 1,
         tree: [],
         tabs: [],
         active: null,
@@ -115,11 +133,33 @@ export const useProject = create<ProjectState>((set, get) => ({
     }
   },
 
+  async followRename(from, to) {
+    if (from === to || get().project?.name === to) return; // already followed
+    renameListeners.forEach((fn) => fn(from, to));
+    moveTabs(from, to);
+    const app = useApp.getState();
+    if (get().project?.name === from) {
+      try {
+        const project = await api.projectSummary(to);
+        if (get().project?.name !== from) return;
+        set({ project });
+        if (app.current === from) app.openProject(to);
+        // Retry anything an autosave tried to write under the old name mid-rename.
+        void get().saveAll();
+        await Promise.all([get().refreshTree(), get().refreshGit()]);
+        void api.syncNow(to);
+      } catch (e) {
+        app.fail(e);
+      }
+    }
+    await app.refreshProjects();
+  },
+
   unload() {
     saveTimers.forEach((t) => clearTimeout(t));
     saveTimers.clear();
     void get().saveAll();
-    set({ project: null, tree: [], tabs: [], active: null, docs: {}, result: null, git: null });
+    set({ project: null, session: get().session + 1, tree: [], tabs: [], active: null, docs: {}, result: null, git: null });
   },
 
   async refreshTree() {
@@ -199,18 +239,20 @@ export const useProject = create<ProjectState>((set, get) => ({
     clearTimeout(saveTimers.get(path));
     // Closing a tab or the project drops the doc right away; still write what it held.
     const project = get().project;
+    const session = get().session;
     const snapshot = get().docs[path];
     // Writes to one path run one after another, so an older write never lands last.
     const run = (writeChains.get(path) ?? Promise.resolve()).then(async () => {
-      const p = project;
-      const same = get().project?.name === p?.name;
+      // Same session means same project, possibly renamed since: write under its current name.
+      const same = get().session === session && !!get().project;
+      const p = same ? get().project : project;
       const doc = (same && get().docs[path]) || snapshot;
       if (!p || !doc || doc.content === doc.saved) return;
       const content = doc.content;
       writing.set(path, content);
       try {
         await api.writeText(p.name, path, content);
-        const cur = get().project?.name === p.name ? get().docs[path] : undefined;
+        const cur = get().session === session && get().project ? get().docs[path] : undefined;
         if (cur) set({ docs: { ...get().docs, [path]: { ...cur, saved: content } } });
       } catch (e) {
         useApp.getState().fail(e);
@@ -248,15 +290,16 @@ export const useProject = create<ProjectState>((set, get) => ({
     }
     clearTimeout(compileTimer);
     await get().saveAll();
+    const session = get().session;
     set({ compiling: true });
     try {
       const result = await api.compile(p.name);
-      if (get().project?.name !== p.name) return;
+      if (get().session !== session) return;
       set({ result, pdfVersion: result.pdf ? Date.now() : get().pdfVersion });
       const errors = result.diagnostics.filter((d) => d.severity === "error").length;
       if (!result.ok && errors) useApp.getState().setUi({ logs: true });
     } catch (e) {
-      if (get().project?.name === p.name) {
+      if (get().session === session) {
         set({
           result: {
             ok: false,
@@ -280,7 +323,9 @@ export const useProject = create<ProjectState>((set, get) => ({
   async onExternalChange(paths) {
     const p = get().project;
     if (!p) return;
-    const fileChanges = paths.filter((x) => x !== ".git");
+    // The folder itself moved: App follows the rename or leaves; nothing to refresh here.
+    if (paths.includes("") && !(await projectExists(p.name))) return;
+    const fileChanges = paths.filter((x) => x !== ".git" && x !== "");
     if (fileChanges.length) await get().refreshTree();
     void get().refreshGit();
     if (fileChanges.some((x) => x === ".folio/project.json")) void get().refreshMeta();
@@ -358,6 +403,16 @@ export const useProject = create<ProjectState>((set, get) => ({
     set({ cursorLine: line });
   },
 }));
+
+function moveTabs(from: string, to: string) {
+  try {
+    const tabs = localStorage.getItem(`folio.tabs.${from}`);
+    if (tabs !== null) localStorage.setItem(`folio.tabs.${to}`, tabs);
+    localStorage.removeItem(`folio.tabs.${from}`);
+  } catch {
+    /* ignore */
+  }
+}
 
 function persistTabs(project: string, tabs: string[]) {
   try {
