@@ -1,7 +1,13 @@
 name: Build installers
 
 on:
+  # Run by hand to (re)build the installers of an existing release.
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the installers to (e.g. v1.1.0)
+        type: string
+        required: true
   workflow_call:
     inputs:
       tag:
