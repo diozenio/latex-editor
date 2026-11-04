@@ -1,18 +1,20 @@
-# Folio
+# QuillTex
 
 A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync and a Claude Code assistant.
 
-- **Projects are plain folders** in `~/Documents/Folio/<project>` (configurable). Open them in Finder or any editor.
-  Per-project settings live in `.folio/project.json`; build output in `.folio/build/` (git-ignored).
-- **Compiles offline-isolated** with a bundled [Tectonic](https://tectonic-typesetting.github.io); packages are cached
-  in Folio's own cache dir. If TeX Live / MacTeX / MiKTeX is installed you can pick pdfLaTeX/XeLaTeX/LuaLaTeX per project.
+- **Projects are plain folders** in `~/Documents/QuillTex/<project>` (configurable). Open them in Finder or any editor.
+  Per-project settings live in `.quilltex/project.json`; build output in `.quilltex/build/` (git-ignored).
+- **Compiles isolated** with a bundled [Tectonic](https://tectonic-typesetting.github.io), or with pdfLaTeX/XeLaTeX/LuaLaTeX
+  from QuillTex's own TeX Live ([TinyTeX](https://yihui.org/tinytex/), downloaded on first use into the app data dir).
+  Missing packages are installed on demand. Neither is ever put on your PATH, and a TeX installed on the computer is
+  never used. Imported projects that bring a `.latexmkrc` compile with TeX Live the way Overleaf would.
 - **Overleaf basics**: new/template projects, import ZIP (drag a .zip onto the home screen), export ZIP, download PDF,
   file tree with drag & drop, logs with clickable errors, SyncTeX (⌘-click in editor or PDF), `\ref`/`\cite` completion.
 - **Git** via the `git` installed on your computer, so your own config, credential helpers and SSH keys apply: stage,
   commit, branches, merge with conflict resolution, pull, push. Background fetch keeps a sync badge current (synced / ↑ to push / ↓ to pull / diverged).
-- **GitHub** via your [GitHub CLI](https://cli.github.com) (`gh`) sign-in; Folio stores no tokens. Publish a project as a
+- **GitHub** via your [GitHub CLI](https://cli.github.com) (`gh`) sign-in; QuillTex stores no tokens. Publish a project as a
   new repo or clone one.
-- **AI assistant**: the side chat drives your installed Claude Code (`claude -p`) with only Folio's MCP tools enabled
+- **AI assistant**: the side chat drives your installed Claude Code (`claude -p`) with only QuillTex's MCP tools enabled
   (no shell/file/web tools, neutral working dir), so it can manage projects but nothing else. Optionally register the
   same MCP server with Claude Code to use it from your terminal.
 
@@ -20,8 +22,8 @@ A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync a
 
 ```sh
 npm install
-npm run app:dev      # fetches Tectonic + builds folio-mcp, then `tauri dev`
-cargo test -p folio-core -p folio-mcp
+npm run app:dev      # fetches Tectonic + builds quilltex-mcp, then `tauri dev`
+cargo test -p quilltex-core -p quilltex-mcp
 ```
 
 ## Build installers
@@ -35,13 +37,13 @@ CI (`.github/workflows/release.yml`) builds all platforms on tag push.
 ## GitHub setup
 
 Nothing to create. Install `git` and the GitHub CLI (`brew install gh` on macOS). If `gh auth login` was already run on
-this computer, Folio picks it up; otherwise Settings → GitHub → *Sign in with GitHub* runs `gh auth login --web` and opens
+this computer, QuillTex picks it up; otherwise Settings → GitHub → *Sign in with GitHub* runs `gh auth login --web` and opens
 the browser. For github.com remotes, git gets credentials from `gh` (like `gh auth setup-git`, but without changing
 your git config).
 
 ## Uninstalling
 
-- **macOS / Linux**: Folio menu → *Uninstall Folio…* removes app data, cache and the Claude Code MCP
+- **macOS / Linux**: QuillTex menu → *Uninstall QuillTex…* removes app data, cache and the Claude Code MCP
   registration, and optionally moves your projects to the Trash. On macOS the app bundle goes to the Trash too.
 - **Windows**: the standard uninstaller has a checkbox for app data and asks whether to delete your projects.
 
@@ -49,7 +51,7 @@ your git config).
 
 ```
 crates/core     shared logic: path sandbox, projects, files, zip, compile, synctex, git, gh
-crates/mcp      folio-mcp: MCP stdio server used by Claude Code
+crates/mcp      quilltex-mcp: MCP stdio server used by Claude Code
 src-tauri       desktop app: IPC commands, watcher, sync loop, GitHub, chat, uninstall
 src             React UI
 ```
