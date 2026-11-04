@@ -1,10 +1,3 @@
-//! `quilltex-mcp`: an MCP server (stdio, newline-delimited JSON-RPC) that lets
-//! Claude Code manage QuillTex projects. Every path goes through
-//! `quilltex_core::Workspace`, so nothing outside the projects folder is
-//! reachable.
-//!
-//! Flags: --root <dir> --tectonic <bin> --tectonic-cache <dir> --texlive <dir> --texlive-archive <file>
-
 mod tools;
 
 use std::io::{BufRead, Write};
@@ -33,7 +26,6 @@ fn main() {
             std::process::exit(1);
         }
     };
-    // Default to the tectonic sidecar shipped next to this binary.
     let tectonic = arg("--tectonic").map(PathBuf::from).or_else(|| {
         let exe = std::env::current_exe().ok()?;
         let dir = exe.parent()?;
@@ -71,7 +63,6 @@ pub fn serve(ctx: &Ctx, input: impl BufRead, mut output: impl Write) {
 
 fn handle(ctx: &Ctx, msg: &Value) -> Option<Value> {
     let method = msg.get("method")?.as_str()?;
-    // Notifications have no id and get no response.
     let id = msg.get("id")?.clone();
     let params = msg.get("params").cloned().unwrap_or(json!({}));
     Some(match method {

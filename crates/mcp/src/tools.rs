@@ -126,7 +126,6 @@ pub fn call(ctx: &Ctx, name: &str, a: &Value) -> R {
             let stem = std::path::Path::new(&meta.main_file).file_stem().unwrap_or_default().to_string_lossy().to_string();
             let log = ws.project_dir(p).map_err(e)?.join(project::BUILD_DIR).join(format!("{stem}.log"));
             let text = std::fs::read_to_string(log).map_err(|_| "no log yet; compile first".to_string())?;
-            // The tail is where errors are.
             let tail: Vec<&str> = text.lines().rev().take(200).collect();
             Ok(tail.into_iter().rev().collect::<Vec<_>>().join("\n"))
         }
