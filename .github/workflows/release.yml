@@ -2,6 +2,11 @@ name: Build installers
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
   push:
     tags: ["v*"]
 
@@ -44,7 +49,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target ${{ matrix.target }}
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: QuillTex ${{ github.ref_name }}
+          tagName: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+          releaseName: QuillTex ${{ inputs.tag || github.ref_name }}
           releaseDraft: false
           uploadUpdaterJson: true
