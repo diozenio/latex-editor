@@ -15,7 +15,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::commands::CmdResult;
 use crate::state::AppState;
 
-const DISALLOWED: &str = "Bash Edit Write MultiEdit NotebookEdit Read Glob Grep LS WebFetch WebSearch Task TodoWrite KillShell BashOutput";
+const DISALLOWED: &str = "Bash Edit Write MultiEdit NotebookEdit Read Glob Grep LS WebFetch WebSearch Task TodoWrite KillShell BashOutput Skill";
 
 #[derive(Default)]
 pub struct ChatProcesses(Mutex<HashMap<String, Arc<Mutex<Child>>>>);
@@ -79,7 +79,7 @@ pub fn chat_send(
     cmd.args(["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"])
         .arg("--mcp-config")
         .arg(&mcp)
-        .args(["--strict-mcp-config", "--allowedTools", "mcp__folio", "--disallowedTools", DISALLOWED])
+        .args(["--strict-mcp-config", "--disable-slash-commands", "--allowedTools", "mcp__folio", "--disallowedTools", DISALLOWED])
         .arg("--append-system-prompt")
         .arg(system);
     let model = state.settings().chat_model;
