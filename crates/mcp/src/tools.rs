@@ -45,8 +45,9 @@ pub fn call(ctx: &Ctx, name: &str, a: &Value) -> R {
             Ok(format!("Exported to {}", dest.display()))
         }
         "rename_project" => {
-            project::rename(ws, s(a, "project")?, s(a, "new_name")?).map_err(e)?;
-            Ok("Renamed".into())
+            let from = s(a, "project")?;
+            let p = project::rename(ws, from, s(a, "new_name")?.trim()).map_err(e)?;
+            Ok(format!("Renamed project \"{from}\" to \"{}\". Use \"{}\" as the project name in every later call.", p.name, p.name))
         }
         "delete_project" => {
             project::delete(ws, s(a, "project")?).map_err(e)?;
@@ -181,7 +182,7 @@ pub fn definitions() -> Vec<Value> {
             json!({ "zip_path": { "type": "string" }, "name": { "type": "string" } }), &["zip_path"]),
         tool("export_zip", "Export a project as a .zip to dest_path.",
             json!({ "project": p, "dest_path": { "type": "string" }, "include_git": { "type": "boolean" } }), &["project", "dest_path"]),
-        tool("rename_project", "Rename a project.", json!({ "project": p, "new_name": { "type": "string" } }), &["project", "new_name"]),
+        tool("rename_project", "Rename a project. Afterwards refer to it only by its new name.", json!({ "project": p, "new_name": { "type": "string" } }), &["project", "new_name"]),
         tool("delete_project", "Move a project to the OS trash (recoverable).", json!({ "project": p }), &["project"]),
         tool("get_project_settings", "Show project settings (main file, engine).", json!({ "project": p }), &["project"]),
         tool("set_main_file", "Set the root .tex file that gets compiled.", json!({ "project": p, "path": path }), &["project", "path"]),
