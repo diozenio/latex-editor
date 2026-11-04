@@ -37,7 +37,7 @@ export async function downloadPdf() {
 }
 
 export function PdfViewer() {
-  const { project, result, pdfVersion, compiling, highlights, compile, inverseSearch } = useProject();
+  const { project, session, result, pdfVersion, compiling, highlights, compile, inverseSearch } = useProject();
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [zoom, setZoom] = useState<Zoom>(() => {
@@ -88,11 +88,11 @@ export function PdfViewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.name, pdfVersion]);
 
-  // Clear when switching projects.
+  // Clear when switching projects (a rename keeps the session and the PDF on screen).
   useEffect(() => {
     setDoc(null);
     setSizes([]);
-  }, [project?.name]);
+  }, [session]);
 
   useLayoutEffect(() => {
     if (savedScroll.current && scroller.current) {
