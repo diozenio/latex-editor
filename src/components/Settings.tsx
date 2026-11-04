@@ -1,13 +1,33 @@
-import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { CheckCircle2, Github, Loader2, Settings as Gear, Sparkles, Sigma, Trash2, XCircle, Copy, ExternalLink, RefreshCw, Info, ArrowDownToLine } from "lucide-react";
-import { api, errorMessage, type GithubUser, type LoginCode, type UsageWindow } from "@/lib/ipc";
+import {
+  ArrowDownToLine,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  Settings as Gear,
+  Github,
+  Info,
+  Loader2,
+  RefreshCw,
+  Sigma,
+  Sparkles,
+  Trash2,
+  XCircle,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { compactNumber } from "@/lib/format";
-import { useApp, type SettingsTab } from "@/stores/app";
+import {
+  api,
+  errorMessage,
+  type GithubUser,
+  type LoginCode,
+  type UsageWindow,
+} from "@/lib/ipc";
+import { type SettingsTab, useApp } from "@/stores/app";
 import { useUpdater } from "@/stores/updater";
-import { getVersion } from "@tauri-apps/api/app";
 import { Dialog } from "./ui/Dialog";
 
 const TABS: [SettingsTab, string, JSX.Element][] = [
@@ -24,11 +44,21 @@ export function SettingsDialog() {
   const setUi = useApp((s) => s.setUi);
   if (!tab) return null;
   return (
-    <Dialog open wide bare title="Settings" onClose={() => setUi({ settings: null })}>
+    <Dialog
+      open
+      wide
+      bare
+      title="Settings"
+      onClose={() => setUi({ settings: null })}
+    >
       <div className="settings">
         <nav className="settings-nav">
           {TABS.map(([id, label, icon]) => (
-            <button key={id} className={`nav-item${tab === id ? " active" : ""}`} onClick={() => setUi({ settings: id })}>
+            <button
+              key={id}
+              className={`nav-item${tab === id ? " active" : ""}`}
+              onClick={() => setUi({ settings: id })}
+            >
               {icon}
               <span className="label">{label}</span>
             </button>
@@ -50,7 +80,11 @@ export function SettingsDialog() {
 function Status({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
     <div className="status-line">
-      {ok ? <CheckCircle2 size={15} style={{ color: "var(--green)" }} /> : <XCircle size={15} style={{ color: "var(--text-tertiary)" }} />}
+      {ok ? (
+        <CheckCircle2 size={15} style={{ color: "var(--green)" }} />
+      ) : (
+        <XCircle size={15} style={{ color: "var(--text-tertiary)" }} />
+      )}
       <span className="grow">{children}</span>
     </div>
   );
@@ -65,18 +99,29 @@ function General() {
       <div className="field">
         <label>Projects folder</label>
         <div className="row">
-          <input className="input mono" readOnly value={settings.projectsRoot} style={{ fontSize: 12 }} />
+          <input
+            className="input mono"
+            readOnly
+            value={settings.projectsRoot}
+            style={{ fontSize: 12 }}
+          />
           <button
             className="btn"
             onClick={async () => {
-              const dir = await open({ directory: true, defaultPath: settings.projectsRoot });
+              const dir = await open({
+                directory: true,
+                defaultPath: settings.projectsRoot,
+              });
               if (dir) await saveSettings({ projectsRoot: dir });
             }}
           >
             Change…
           </button>
         </div>
-        <span className="hint">Every project is a normal folder here. You can open them with any editor.</span>
+        <span className="hint">
+          Every project is a normal folder here. You can open them with any
+          editor.
+        </span>
       </div>
       <div className="setting-row">
         <div className="text">
@@ -84,7 +129,11 @@ function General() {
         </div>
         <div className="seg" style={{ width: 220, margin: 0 }}>
           {(["system", "light", "dark"] as const).map((t) => (
-            <button key={t} className={settings.theme === t ? "on" : ""} onClick={() => saveSettings({ theme: t })}>
+            <button
+              key={t}
+              className={settings.theme === t ? "on" : ""}
+              onClick={() => saveSettings({ theme: t })}
+            >
               {t[0].toUpperCase() + t.slice(1)}
             </button>
           ))}
@@ -101,7 +150,9 @@ function General() {
             min={10}
             max={24}
             value={settings.editorFontSize}
-            onChange={(e) => saveSettings({ editorFontSize: Number(e.target.value) || 13 })}
+            onChange={(e) =>
+              saveSettings({ editorFontSize: Number(e.target.value) || 13 })
+            }
           />
           <span className="muted">px</span>
         </div>
@@ -135,7 +186,9 @@ function General() {
           className="select"
           style={{ width: 130 }}
           value={settings.syncIntervalSecs}
-          onChange={(e) => saveSettings({ syncIntervalSecs: Number(e.target.value) })}
+          onChange={(e) =>
+            saveSettings({ syncIntervalSecs: Number(e.target.value) })
+          }
         >
           <option value={60}>1 minute</option>
           <option value={120}>2 minutes</option>
@@ -157,7 +210,9 @@ function GithubTab() {
   const user = settings.githubUser;
 
   const setUser = (githubUser: GithubUser | null) =>
-    useApp.setState({ settings: { ...useApp.getState().settings!, githubUser } });
+    useApp.setState({
+      settings: { ...useApp.getState().settings!, githubUser },
+    });
 
   const recheck = async () => {
     setChecking(true);
@@ -200,15 +255,20 @@ function GithubTab() {
       {!info.ghInstalled ? (
         <div className="field">
           <span className="hint">
-            QuillTex signs in through the GitHub CLI (<code>gh</code>). Install it, then come back here.
+            QuillTex signs in through the GitHub CLI (<code>gh</code>). Install
+            it, then come back here.
             {info.platform === "macos" && (
               <>
-                {" "}With Homebrew: <code>brew install gh</code>
+                {" "}
+                With Homebrew: <code>brew install gh</code>
               </>
             )}
           </span>
           <div className="row">
-            <button className="btn primary" onClick={() => openUrl("https://cli.github.com")}>
+            <button
+              className="btn primary"
+              onClick={() => openUrl("https://cli.github.com")}
+            >
               <ExternalLink size={13} /> Get GitHub CLI
             </button>
             <button className="btn" disabled={checking} onClick={recheck}>
@@ -218,9 +278,19 @@ function GithubTab() {
         </div>
       ) : info.githubConnected && user ? (
         <div className="status-line" style={{ padding: 12 }}>
-          {user.avatarUrl && <img src={user.avatarUrl} alt="" width={32} height={32} style={{ borderRadius: 8 }} />}
+          {user.avatarUrl && (
+            <img
+              src={user.avatarUrl}
+              alt=""
+              width={32}
+              height={32}
+              style={{ borderRadius: 8 }}
+            />
+          )}
           <div className="grow">
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{user.name || user.login}</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>
+              {user.name || user.login}
+            </div>
             <div className="muted">@{user.login}</div>
           </div>
           <button
@@ -244,10 +314,16 @@ function GithubTab() {
           <label>Enter this code on GitHub (copied to your clipboard)</label>
           <div className="device-code">{code.userCode}</div>
           <div className="row">
-            <button className="btn" onClick={() => navigator.clipboard.writeText(code.userCode)}>
+            <button
+              className="btn"
+              onClick={() => navigator.clipboard.writeText(code.userCode)}
+            >
               <Copy size={13} /> Copy
             </button>
-            <button className="btn" onClick={() => openUrl(code.verificationUri)}>
+            <button
+              className="btn"
+              onClick={() => openUrl(code.verificationUri)}
+            >
               <ExternalLink size={13} /> Open GitHub
             </button>
             <button className="btn" onClick={() => api.githubLoginCancel()}>
@@ -263,24 +339,42 @@ function GithubTab() {
         </div>
       ) : (
         <div className="row">
-          <button className="btn primary lg" disabled={waiting} onClick={connect}>
-            {waiting ? <Loader2 size={15} className="spin" /> : <Github size={15} />} Sign in with GitHub
+          <button
+            className="btn primary lg"
+            disabled={waiting}
+            onClick={connect}
+          >
+            {waiting ? (
+              <Loader2 size={15} className="spin" />
+            ) : (
+              <Github size={15} />
+            )}{" "}
+            Sign in with GitHub
           </button>
-          <button className="btn" disabled={checking || waiting} onClick={recheck}>
-            {checking && <Loader2 size={13} className="spin" />} Already signed in with gh? Check again
+          <button
+            className="btn"
+            disabled={checking || waiting}
+            onClick={recheck}
+          >
+            {checking && <Loader2 size={13} className="spin" />} Already signed
+            in with gh? Check again
           </button>
         </div>
       )}
       {error && <div className="banner red">{error}</div>}
       <span className="hint muted" style={{ fontSize: 12 }}>
-        QuillTex uses your GitHub CLI sign-in and the git installed on this computer, with your own git config, credential
-        helpers and SSH keys. It stores no tokens.
+        QuillTex uses your GitHub CLI sign-in and the git installed on this
+        computer, with your own git config, credential helpers and SSH keys. It
+        stores no tokens.
       </span>
     </>
   );
 }
 
-const WINDOW_LABELS = { five_hour: "Current session (5 hours)", seven_day: "Weekly (7 days)" };
+const WINDOW_LABELS = {
+  five_hour: "Current session (5 hours)",
+  seven_day: "Weekly (7 days)",
+};
 
 function resetsIn(secs: number): string {
   const m = Math.max(0, Math.round((secs * 1000 - Date.now()) / 60000));
@@ -290,8 +384,11 @@ function resetsIn(secs: number): string {
 }
 
 function UsageBar({ w }: { w: UsageWindow }) {
-  const pct = (f: number) => `${(Math.min(1, Math.max(0, f)) * 100).toFixed(1)}%`;
-  const quilltex = w.totalTokens ? w.utilization * (w.quilltexTokens / w.totalTokens) : 0;
+  const pct = (f: number) =>
+    `${(Math.min(1, Math.max(0, f)) * 100).toFixed(1)}%`;
+  const quilltex = w.totalTokens
+    ? w.utilization * (w.quilltexTokens / w.totalTokens)
+    : 0;
   const other = Math.max(0, w.utilization - quilltex);
   const limit = w.estimatedLimit;
   return (
@@ -300,23 +397,37 @@ function UsageBar({ w }: { w: UsageWindow }) {
         <strong>{WINDOW_LABELS[w.kind]}</strong>
         <span className="muted">resets in {resetsIn(w.resetsAt)}</span>
       </div>
-      <div className="usage-bar" title={`${Math.round(w.utilization * 100)}% of the limit used`}>
+      <div
+        className="usage-bar"
+        title={`${Math.round(w.utilization * 100)}% of the limit used`}
+      >
         <div className="seg other" style={{ width: pct(other) }} />
         <div className="seg quilltex" style={{ width: pct(quilltex) }} />
       </div>
       <div className="usage-legend">
         <span>
-          <i className="dot other" /> Everything else {compactNumber(w.totalTokens - w.quilltexTokens)}
+          <i className="dot other" /> Everything else{" "}
+          {compactNumber(w.totalTokens - w.quilltexTokens)}
         </span>
         <span>
-          <i className="dot quilltex" /> QuillTex {compactNumber(w.quilltexTokens)}
+          <i className="dot quilltex" /> QuillTex{" "}
+          {compactNumber(w.quilltexTokens)}
         </span>
       </div>
       <div className="usage-numbers">
         <span>
-          <strong>{w.totalTokens.toLocaleString()}</strong> tokens used · {Math.round(w.utilization * 100)}%
+          <strong>{w.totalTokens.toLocaleString()}</strong> tokens used ·{" "}
+          {Math.round(w.utilization * 100)}%
         </span>
-        <span>{limit ? <>limit ≈ <strong>{limit.toLocaleString()}</strong> tokens</> : "limit unknown yet"}</span>
+        <span>
+          {limit ? (
+            <>
+              limit ≈ <strong>{limit.toLocaleString()}</strong> tokens
+            </>
+          ) : (
+            "limit unknown yet"
+          )}
+        </span>
       </div>
     </div>
   );
@@ -344,16 +455,29 @@ function UsageSection() {
     <div className="usage">
       <div className="usage-title">
         <h4>Usage</h4>
-        <button className="btn sm" disabled={loading} onClick={() => load(true)}>
-          {loading ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />} Refresh
+        <button
+          className="btn sm"
+          disabled={loading}
+          onClick={() => load(true)}
+        >
+          {loading ? (
+            <Loader2 size={13} className="spin" />
+          ) : (
+            <RefreshCw size={13} />
+          )}{" "}
+          Refresh
         </button>
       </div>
-      {windows?.map((w) => <UsageBar key={w.kind} w={w} />)}
+      {windows?.map((w) => (
+        <UsageBar key={w.kind} w={w} />
+      ))}
       {error && <span className="hint muted">{error}</span>}
       {windows && (
         <span className="hint muted" style={{ fontSize: 12 }}>
-          Percentages come from Claude Code. Claude doesn’t publish a token limit, so it is estimated from your recent
-          usage (input, output and cache-write tokens in the window), which is counted from Claude Code’s local history.
+          Percentages come from Claude Code. Claude doesn’t publish a token
+          limit, so it is estimated from your recent usage (input, output and
+          cache-write tokens in the window), which is counted from Claude Code’s
+          local history.
         </span>
       )}
     </div>
@@ -370,7 +494,12 @@ function ClaudeTab() {
       if (settings.mcpRegistered) await api.mcpUnregister();
       else await api.mcpRegister();
       useApp.setState({ settings: await api.getSettings() });
-      toast(settings.mcpRegistered ? "Removed from Claude Code" : "QuillTex is now available in Claude Code", "success");
+      toast(
+        settings.mcpRegistered
+          ? "Removed from Claude Code"
+          : "QuillTex is now available in Claude Code",
+        "success",
+      );
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -404,15 +533,24 @@ function ClaudeTab() {
       <div className="setting-row">
         <div className="text">
           <strong>Use QuillTex from Claude Code in your terminal</strong>
-          <span>Registers QuillTex’s MCP server with Claude Code (user scope) so `claude` can manage your projects anywhere.</span>
+          <span>
+            Registers QuillTex’s MCP server with Claude Code (user scope) so
+            `claude` can manage your projects anywhere.
+          </span>
         </div>
-        <button className={`switch${settings.mcpRegistered ? " on" : ""}`} disabled={busy || !info?.claude} onClick={toggleMcp} />
+        <button
+          className={`switch${settings.mcpRegistered ? " on" : ""}`}
+          disabled={busy || !info?.claude}
+          onClick={toggleMcp}
+        />
       </div>
       {info?.claude && <UsageSection />}
       <div className="banner blue">
         <span>
-          The assistant only gets QuillTex’s tools (projects, files, compile, git). Shell, file system and web tools are
-          disabled, and it runs from an empty folder, so it can’t read or change anything outside your projects.
+          The assistant only gets QuillTex’s tools (projects, files, compile,
+          git). Shell, file system and web tools are disabled, and it runs from
+          an empty folder, so it can’t read or change anything outside your
+          projects.
         </span>
       </div>
     </>
@@ -427,7 +565,9 @@ function LatexTab() {
   const install = async () => {
     setBusy(true);
     setProgress("Starting…");
-    const unlisten = await listen<string>("texlive-status", (e) => setProgress(e.payload));
+    const unlisten = await listen<string>("texlive-status", (e) =>
+      setProgress(e.payload),
+    );
     try {
       await api.installTexlive();
       await refreshInfo();
@@ -457,7 +597,9 @@ function LatexTab() {
     <>
       <h3>LaTeX</h3>
       <Status ok={!!info?.tectonic}>
-        {info?.tectonic ? "Tectonic is bundled and ready." : "Bundled Tectonic is missing. Run `npm run sidecars`."}
+        {info?.tectonic
+          ? "Tectonic is bundled and ready."
+          : "Bundled Tectonic is missing. Run `npm run sidecars`."}
       </Status>
       <div className="setting-row">
         <div className="text">
@@ -466,7 +608,9 @@ function LatexTab() {
             {progress ??
               (info?.texlive
                 ? "Installed inside QuillTex. Missing packages are added automatically when a document needs them."
-                : "Downloaded on the first compile that uses it (about 70 MB), or now.")}
+                : info?.texliveBundled
+                  ? "Included with QuillTex. Set up on the first compile that uses it, or now."
+                  : "Downloaded on the first compile that uses it (about 70 MB), or now.")}
           </span>
         </div>
         {info?.texlive ? (
@@ -475,13 +619,19 @@ function LatexTab() {
           </button>
         ) : (
           <button className="btn" disabled={busy} onClick={install}>
-            {busy ? <Loader2 size={13} className="spin" /> : <ArrowDownToLine size={13} />} Install
+            {busy ? (
+              <Loader2 size={13} className="spin" />
+            ) : (
+              <ArrowDownToLine size={13} />
+            )}{" "}
+            Install
           </button>
         )}
       </div>
       <span className="hint muted" style={{ fontSize: 12 }}>
-        Both compilers live in QuillTex’s own folders and are never added to your PATH, so they don’t touch, and aren’t
-        used by, any other TeX on this computer. Pick the compiler per project under Project settings.
+        Both compilers live in QuillTex’s own folders and are never added to
+        your PATH, so they don’t touch, and aren’t used by, any other TeX on
+        this computer. Pick the compiler per project under Project settings.
       </span>
     </>
   );
@@ -489,7 +639,14 @@ function LatexTab() {
 
 function AboutTab() {
   const [version, setVersion] = useState("");
-  const { phase, version: next, progress, error, check, install } = useUpdater();
+  const {
+    phase,
+    version: next,
+    progress,
+    error,
+    check,
+    install,
+  } = useUpdater();
   useEffect(() => {
     void getVersion().then(setVersion);
   }, []);
@@ -502,7 +659,8 @@ function AboutTab() {
           <strong>QuillTex {version}</strong>
           <span>
             {phase === "checking" && "Checking for updates…"}
-            {phase === "downloading" && `Downloading ${next}${progress ? ` (${Math.round(progress * 100)}%)` : "…"}`}
+            {phase === "downloading" &&
+              `Downloading ${next}${progress ? ` (${Math.round(progress * 100)}%)` : "…"}`}
             {phase === "available" && `Version ${next} is available`}
             {phase === "error" && `Couldn’t check for updates: ${error}`}
             {phase === "idle" && "You’re on the latest version"}
@@ -514,7 +672,12 @@ function AboutTab() {
           </button>
         ) : (
           <button className="btn" disabled={busy} onClick={() => void check()}>
-            {busy ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Check now
+            {busy ? (
+              <Loader2 size={14} className="spin" />
+            ) : (
+              <RefreshCw size={14} />
+            )}{" "}
+            Check now
           </button>
         )}
       </div>
@@ -528,8 +691,10 @@ function UninstallTab() {
     <>
       <h3>Uninstall</h3>
       <p className="muted" style={{ margin: 0 }}>
-        QuillTex keeps everything in its own folders: settings, the TeX package cache and chat history. Uninstalling removes
-        all of it, the saved GitHub token and the Claude Code registration. You choose whether your projects stay.
+        QuillTex keeps everything in its own folders: settings, the TeX package
+        cache and chat history. Uninstalling removes all of it, the saved GitHub
+        token and the Claude Code registration. You choose whether your projects
+        stay.
       </p>
       <button
         className="btn danger"

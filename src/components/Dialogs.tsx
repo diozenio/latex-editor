@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   FileText,
-  GitMerge,
   Github,
+  GitMerge,
   Globe,
   Loader2,
   Lock,
@@ -12,17 +11,26 @@ import {
   Presentation,
   ScrollText,
   Search,
-  UserSquare,
   Square,
+  UserSquare,
 } from "lucide-react";
-import { api, errorMessage, type Branch, type Commit, type CommitFile, type Engine, type Repo } from "@/lib/ipc";
+import { useEffect, useMemo, useState } from "react";
+import { slug, timeAgo } from "@/lib/format";
+import {
+  api,
+  type Branch,
+  type Commit,
+  type CommitFile,
+  type Engine,
+  errorMessage,
+  type Repo,
+} from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
-import { slug, timeAgo } from "@/lib/format";
-import { Dialog } from "./ui/Dialog";
-import { Dropdown } from "./ui/Menu";
 import { commitMenu } from "./commitMenu";
 import { describeMerge } from "./GitPanel";
+import { Dialog } from "./ui/Dialog";
+import { Dropdown } from "./ui/Menu";
 
 export function Dialogs() {
   const dialog = useApp((s) => s.dialog);
@@ -38,9 +46,17 @@ export function Dialogs() {
     case "uninstall":
       return <Uninstall onClose={close} />;
     case "diff":
-      return <Diff project={dialog.project} path={dialog.path} onClose={close} />;
+      return (
+        <Diff project={dialog.project} path={dialog.path} onClose={close} />
+      );
     case "commit":
-      return <CommitDetails project={dialog.project} commit={dialog.commit} onClose={close} />;
+      return (
+        <CommitDetails
+          project={dialog.project}
+          commit={dialog.commit}
+          onClose={close}
+        />
+      );
     case "merge":
       return <Merge project={dialog.project} onClose={close} />;
     case "project-settings":
@@ -109,7 +125,11 @@ function NewProject({ onClose }: { onClose: () => void }) {
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" disabled={!name.trim() || busy} onClick={submit}>
+          <button
+            className="btn primary"
+            disabled={!name.trim() || busy}
+            onClick={submit}
+          >
             {busy && <Loader2 size={14} className="spin" />} Create
           </button>
         </>
@@ -130,7 +150,11 @@ function NewProject({ onClose }: { onClose: () => void }) {
         <label>Template</label>
         <div className="template-grid">
           {templates.map(([id, label]) => (
-            <button key={id} className={`template${template === id ? " on" : ""}`} onClick={() => setTemplate(id)}>
+            <button
+              key={id}
+              className={`template${template === id ? " on" : ""}`}
+              onClick={() => setTemplate(id)}
+            >
               {TEMPLATE_ICONS[id] ?? <ScrollText size={18} />}
               {label}
             </button>
@@ -151,12 +175,19 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
   const { busy, error, run } = useBusy();
 
   useEffect(() => {
-    if (app.info?.githubConnected) api.githubRepos().then(setRepos).catch(() => setRepos([]));
+    if (app.info?.githubConnected)
+      api
+        .githubRepos()
+        .then(setRepos)
+        .catch(() => setRepos([]));
     else setRepos([]);
   }, [app.info?.githubConnected]);
 
   const filtered = useMemo(
-    () => (repos ?? []).filter((r) => r.fullName.toLowerCase().includes(query.toLowerCase())).slice(0, 50),
+    () =>
+      (repos ?? [])
+        .filter((r) => r.fullName.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 50),
     [repos, query],
   );
 
@@ -167,7 +198,16 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
 
   const submit = () =>
     run(async () => {
-      const p = await api.gitClone(url, name || slug(url.split("/").pop()?.replace(/\.git$/, "") ?? "repo"));
+      const p = await api.gitClone(
+        url,
+        name ||
+          slug(
+            url
+              .split("/")
+              .pop()
+              ?.replace(/\.git$/, "") ?? "repo",
+          ),
+      );
       await app.refreshProjects();
       app.openProject(p.name);
       onClose();
@@ -179,13 +219,21 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
       wide
       onClose={onClose}
       title="Clone from GitHub"
-      description={app.info?.githubConnected ? "Pick one of your repositories or paste a URL." : "Paste a repository URL. Sign in to GitHub in Settings to browse your repositories."}
+      description={
+        app.info?.githubConnected
+          ? "Pick one of your repositories or paste a URL."
+          : "Paste a repository URL. Sign in to GitHub in Settings to browse your repositories."
+      }
       footer={
         <>
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" disabled={!url || busy} onClick={submit}>
+          <button
+            className="btn primary"
+            disabled={!url || busy}
+            onClick={submit}
+          >
             {busy && <Loader2 size={14} className="spin" />} Clone
           </button>
         </>
@@ -195,9 +243,17 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
         <div className="field">
           <div className="search-field">
             <Search size={14} />
-            <input autoFocus placeholder="Search repositories" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input
+              autoFocus
+              placeholder="Search repositories"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
-          <div className="card" style={{ maxHeight: 240, overflow: "auto", borderRadius: 10 }}>
+          <div
+            className="card"
+            style={{ maxHeight: 240, overflow: "auto", borderRadius: 10 }}
+          >
             {repos === null ? (
               <div className="empty" style={{ padding: 24 }}>
                 <Loader2 size={16} className="spin" />
@@ -207,15 +263,25 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
                 <div
                   key={r.fullName}
                   className="project-row"
-                  style={{ height: 40, background: url === r.cloneUrl ? "var(--bg-selected)" : undefined }}
+                  style={{
+                    height: 40,
+                    background:
+                      url === r.cloneUrl ? "var(--bg-selected)" : undefined,
+                  }}
                   onClick={() => pick(r)}
                   onDoubleClick={() => {
                     pick(r);
                   }}
                 >
-                  {r.private ? <Lock size={13} className="muted" /> : <Globe size={13} className="muted" />}
+                  {r.private ? (
+                    <Lock size={13} className="muted" />
+                  ) : (
+                    <Globe size={13} className="muted" />
+                  )}
                   <span className="title">{r.fullName}</span>
-                  <span className="muted">{timeAgo(Date.parse(r.updatedAt))}</span>
+                  <span className="muted">
+                    {timeAgo(Date.parse(r.updatedAt))}
+                  </span>
                 </div>
               ))
             )}
@@ -225,11 +291,20 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
       <div className="row" style={{ alignItems: "flex-end" }}>
         <div className="field grow">
           <label>Repository URL</label>
-          <input className="input" placeholder="https://github.com/user/repo.git" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input
+            className="input"
+            placeholder="https://github.com/user/repo.git"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
         </div>
         <div className="field" style={{ width: 200 }}>
           <label>Project name</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
         </div>
       </div>
       {error && <div className="banner red">{error}</div>}
@@ -237,7 +312,13 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Publish({ project, onClose }: { project: string; onClose: () => void }) {
+function Publish({
+  project,
+  onClose,
+}: {
+  project: string;
+  onClose: () => void;
+}) {
   const app = useApp();
   const [name, setName] = useState(slug(project));
   const [isPrivate, setPrivate] = useState(true);
@@ -300,18 +381,36 @@ function Publish({ project, onClose }: { project: string; onClose: () => void })
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" disabled={!name || busy} onClick={submit}>
-            {busy ? <Loader2 size={14} className="spin" /> : <Github size={14} />} Publish
+          <button
+            className="btn primary"
+            disabled={!name || busy}
+            onClick={submit}
+          >
+            {busy ? (
+              <Loader2 size={14} className="spin" />
+            ) : (
+              <Github size={14} />
+            )}{" "}
+            Publish
           </button>
         </>
       }
     >
       <div className="field">
         <label>Repository name</label>
-        <input className="input" autoFocus value={name} onChange={(e) => setName(slug(e.target.value) || e.target.value)} />
+        <input
+          className="input"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(slug(e.target.value) || e.target.value)}
+        />
       </div>
       <label className="checkbox">
-        <input type="checkbox" checked={isPrivate} onChange={(e) => setPrivate(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={isPrivate}
+          onChange={(e) => setPrivate(e.target.checked)}
+        />
         <span>
           Private repository
           <div className="muted" style={{ fontSize: 12 }}>
@@ -341,7 +440,10 @@ function Merge({ project, onClose }: { project: string; onClose: () => void }) {
   const submit = () =>
     run(async () => {
       const out = await api.gitMerge(project, from);
-      app.toast(describeMerge(out), out.type === "Conflicts" ? "error" : "success");
+      app.toast(
+        describeMerge(out),
+        out.type === "Conflicts" ? "error" : "success",
+      );
       await useProject.getState().refreshGit();
       await useProject.getState().refreshTree();
       if (out.type === "Conflicts" && out.files[0]) {
@@ -362,15 +464,28 @@ function Merge({ project, onClose }: { project: string; onClose: () => void }) {
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" disabled={!from || busy} onClick={submit}>
-            {busy ? <Loader2 size={14} className="spin" /> : <GitMerge size={14} />} Merge
+          <button
+            className="btn primary"
+            disabled={!from || busy}
+            onClick={submit}
+          >
+            {busy ? (
+              <Loader2 size={14} className="spin" />
+            ) : (
+              <GitMerge size={14} />
+            )}{" "}
+            Merge
           </button>
         </>
       }
     >
       <div className="field">
         <label>Merge from</label>
-        <select className="select" value={from} onChange={(e) => setFrom(e.target.value)}>
+        <select
+          className="select"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        >
           {branches
             .filter((b) => !b.isHead)
             .map((b) => (
@@ -385,10 +500,21 @@ function Merge({ project, onClose }: { project: string; onClose: () => void }) {
   );
 }
 
-function Diff({ project, path, onClose }: { project: string; path: string; onClose: () => void }) {
+function Diff({
+  project,
+  path,
+  onClose,
+}: {
+  project: string;
+  path: string;
+  onClose: () => void;
+}) {
   const [diff, setDiff] = useState<string | null>(null);
   useEffect(() => {
-    api.gitDiff(project, path).then(setDiff).catch((e) => setDiff(errorMessage(e)));
+    api
+      .gitDiff(project, path)
+      .then(setDiff)
+      .catch((e) => setDiff(errorMessage(e)));
   }, [project, path]);
   return (
     <Dialog
@@ -431,7 +557,13 @@ function DiffLines({ diff }: { diff: string | null }) {
           <div
             key={i}
             className={
-              l.startsWith("@@") ? "hunk" : l.startsWith("+") && !l.startsWith("+++") ? "add" : l.startsWith("-") && !l.startsWith("---") ? "del" : ""
+              l.startsWith("@@")
+                ? "hunk"
+                : l.startsWith("+") && !l.startsWith("+++")
+                  ? "add"
+                  : l.startsWith("-") && !l.startsWith("---")
+                    ? "del"
+                    : ""
             }
           >
             {l || " "}
@@ -442,14 +574,25 @@ function DiffLines({ diff }: { diff: string | null }) {
   );
 }
 
-function CommitDetails({ project, commit, onClose }: { project: string; commit: Commit; onClose: () => void }) {
+function CommitDetails({
+  project,
+  commit,
+  onClose,
+}: {
+  project: string;
+  commit: Commit;
+  onClose: () => void;
+}) {
   const [files, setFiles] = useState<CommitFile[] | null>(null);
   const [path, setPath] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
   const [head, setHead] = useState(false);
 
   useEffect(() => {
-    api.gitLog(project).then((l) => setHead(l[0]?.id === commit.id)).catch(() => {});
+    api
+      .gitLog(project)
+      .then((l) => setHead(l[0]?.id === commit.id))
+      .catch(() => {});
     api
       .gitCommitFiles(project, commit.id)
       .then((f) => {
@@ -462,7 +605,10 @@ function CommitDetails({ project, commit, onClose }: { project: string; commit: 
   useEffect(() => {
     if (!path) return;
     setDiff(null);
-    api.gitCommitDiff(project, commit.id, path).then(setDiff).catch((e) => setDiff(errorMessage(e)));
+    api
+      .gitCommitDiff(project, commit.id, path)
+      .then(setDiff)
+      .catch((e) => setDiff(errorMessage(e)));
   }, [project, commit.id, path]);
 
   return (
@@ -497,7 +643,13 @@ function CommitDetails({ project, commit, onClose }: { project: string; commit: 
                 style={{ "--i": Math.min(i, 10) } as React.CSSProperties}
                 onClick={() => setPath(f.path)}
               >
-                <span className={`kind ${f.kind}`}>{{ new: "A", modified: "M", deleted: "D", typechange: "T" }[f.kind]}</span>
+                <span className={`kind ${f.kind}`}>
+                  {
+                    { new: "A", modified: "M", deleted: "D", typechange: "T" }[
+                      f.kind
+                    ]
+                  }
+                </span>
                 <span className="name" title={f.path}>
                   &lrm;{f.path}
                 </span>
@@ -522,7 +674,16 @@ const ENGINES: [Engine, string][] = [
   ["latexmk-xelatex", "XeLaTeX (TeX Live)"],
   ["latexmk-lualatex", "LuaLaTeX (TeX Live)"],
 ];
-const COLORS = ["#6366F1", "#3B82F6", "#84CC16", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6", "#EF4444"];
+const COLORS = [
+  "#6366F1",
+  "#3B82F6",
+  "#84CC16",
+  "#10B981",
+  "#F59E0B",
+  "#EC4899",
+  "#8B5CF6",
+  "#EF4444",
+];
 
 function ProjectSettings({ onClose }: { onClose: () => void }) {
   const project = useProject((s) => s.project);
@@ -532,7 +693,9 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
   const { busy, error, run } = useBusy();
   if (!project || !meta) return null;
   const texFiles = (function walk(nodes: typeof tree): string[] {
-    return nodes.flatMap((n) => (n.isDir ? walk(n.children ?? []) : /\.tex$/i.test(n.name) ? [n.path] : []));
+    return nodes.flatMap((n) =>
+      n.isDir ? walk(n.children ?? []) : /\.tex$/i.test(n.name) ? [n.path] : [],
+    );
   })(tree);
 
   const submit = () =>
@@ -551,7 +714,8 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
       title="Project settings"
       description={
         <>
-          Saved in <span className="mono">.quilltex/project.json</span> inside the project.
+          Saved in <span className="mono">.quilltex/project.json</span> inside
+          the project.
         </>
       }
       footer={
@@ -567,7 +731,11 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
     >
       <div className="field">
         <label>Main document</label>
-        <select className="select" value={meta.mainFile} onChange={(e) => setMeta({ ...meta, mainFile: e.target.value })}>
+        <select
+          className="select"
+          value={meta.mainFile}
+          onChange={(e) => setMeta({ ...meta, mainFile: e.target.value })}
+        >
           {texFiles.map((f) => (
             <option key={f}>{f}</option>
           ))}
@@ -575,17 +743,25 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
       </div>
       <div className="field">
         <label>Compiler</label>
-        <select className="select" value={meta.engine} onChange={(e) => setMeta({ ...meta, engine: e.target.value as Engine })}>
+        <select
+          className="select"
+          value={meta.engine}
+          onChange={(e) =>
+            setMeta({ ...meta, engine: e.target.value as Engine })
+          }
+        >
           {ENGINES.map(([id, label]) => (
             <option key={id} value={id}>
               {label}
-              {id !== "tectonic" && !info?.texlive ? " (downloads on first compile)" : ""}
+              {id !== "tectonic" && !info?.texlive && !info?.texliveBundled
+                ? " (downloads on first compile)"
+                : ""}
             </option>
           ))}
         </select>
         <span className="hint">
-          Both belong to QuillTex and download packages on demand. TeX Live covers newer packages, biber, glossaries and
-          LuaLaTeX.
+          Both belong to QuillTex and download packages on demand. TeX Live
+          covers newer packages, biber, glossaries and LuaLaTeX.
         </span>
       </div>
       <div className="field">
@@ -601,7 +777,10 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
                 borderRadius: 7,
                 background: c,
                 border: "none",
-                boxShadow: meta.color === c ? `0 0 0 2px var(--bg-elevated), 0 0 0 4px ${c}` : "none",
+                boxShadow:
+                  meta.color === c
+                    ? `0 0 0 2px var(--bg-elevated), 0 0 0 4px ${c}`
+                    : "none",
               }}
             />
           ))}
@@ -612,7 +791,10 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
           <strong>Compile automatically</strong>
           <span>Recompile on ⌘S and when files change outside the editor</span>
         </div>
-        <button className={`switch${meta.autoCompile ? " on" : ""}`} onClick={() => setMeta({ ...meta, autoCompile: !meta.autoCompile })} />
+        <button
+          className={`switch${meta.autoCompile ? " on" : ""}`}
+          onClick={() => setMeta({ ...meta, autoCompile: !meta.autoCompile })}
+        />
       </div>
       {error && <div className="banner red">{error}</div>}
     </Dialog>
@@ -667,16 +849,22 @@ function Uninstall({ onClose }: { onClose: () => void }) {
             <span>
               App and app data
               <div className="muted" style={{ fontSize: 12 }}>
-                Settings, caches and logs. Nothing outside QuillTex’s own folders is touched.
+                Settings, caches and logs. Nothing outside QuillTex’s own
+                folders is touched.
               </div>
             </span>
           </label>
           <label className="checkbox">
-            <input type="checkbox" checked={deleteProjects} onChange={(e) => setDeleteProjects(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={deleteProjects}
+              onChange={(e) => setDeleteProjects(e.target.checked)}
+            />
             <span>
               Also delete my projects
               <div className="muted" style={{ fontSize: 12 }}>
-                Moves <span className="mono">{info?.projectsRoot}</span> to the Trash.
+                Moves <span className="mono">{info?.projectsRoot}</span> to the
+                Trash.
               </div>
             </span>
           </label>
@@ -685,11 +873,18 @@ function Uninstall({ onClose }: { onClose: () => void }) {
               <label>
                 Type <span className="mono">delete</span> to confirm
               </label>
-              <input className="input" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
+              <input
+                className="input"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+              />
             </div>
           )}
           {info?.platform === "windows" && (
-            <div className="banner blue">Windows opens the standard uninstaller, which has the same options.</div>
+            <div className="banner blue">
+              Windows opens the standard uninstaller, which has the same
+              options.
+            </div>
           )}
         </>
       )}
@@ -698,7 +893,13 @@ function Uninstall({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Prompt({ d, onClose }: { d: Extract<import("@/stores/app").Dialog, { kind: "prompt" }>; onClose: () => void }) {
+function Prompt({
+  d,
+  onClose,
+}: {
+  d: Extract<import("@/stores/app").Dialog, { kind: "prompt" }>;
+  onClose: () => void;
+}) {
   const [value, setValue] = useState(d.initial ?? "");
   const { busy, error, run } = useBusy();
   const submit = () =>
@@ -717,7 +918,11 @@ function Prompt({ d, onClose }: { d: Extract<import("@/stores/app").Dialog, { ki
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" disabled={!value.trim() || busy} onClick={submit}>
+          <button
+            className="btn primary"
+            disabled={!value.trim() || busy}
+            onClick={submit}
+          >
             {busy && <Loader2 size={14} className="spin" />} {d.confirm ?? "OK"}
           </button>
         </>
@@ -739,7 +944,13 @@ function Prompt({ d, onClose }: { d: Extract<import("@/stores/app").Dialog, { ki
   );
 }
 
-function Confirm({ d, onClose }: { d: Extract<import("@/stores/app").Dialog, { kind: "confirm" }>; onClose: () => void }) {
+function Confirm({
+  d,
+  onClose,
+}: {
+  d: Extract<import("@/stores/app").Dialog, { kind: "confirm" }>;
+  onClose: () => void;
+}) {
   const { busy, error, run } = useBusy();
   return (
     <Dialog
@@ -763,7 +974,8 @@ function Confirm({ d, onClose }: { d: Extract<import("@/stores/app").Dialog, { k
               })
             }
           >
-            {busy && <Loader2 size={14} className="spin" />} {d.confirm ?? "Confirm"}
+            {busy && <Loader2 size={14} className="spin" />}{" "}
+            {d.confirm ?? "Confirm"}
           </button>
         </>
       }
