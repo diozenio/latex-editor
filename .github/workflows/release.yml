@@ -1,25 +1,37 @@
-name: Build installers
+name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Release tag to attach the installers to (e.g. v1.1.0)
-        type: string
-        required: true
-  workflow_call:
-    inputs:
-      tag:
-        type: string
-        required: true
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  create:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: echo "version=$(jq -r .version src-tauri/tauri.conf.json | cut -d. -f1,2).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "QuillTex $TAG" --notes "$(git log -1 --format=%B)"
+          echo "id=$(gh release view "$TAG" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: create
     strategy:
       fail-fast: false
       matrix:
@@ -49,6 +61,9 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
       - run: pnpm install --frozen-lockfile
       - run: cargo test -p quilltex-core -p quilltex-mcp
+      - name: Set version
+        shell: bash
+        run: node -e 'const fs=require("fs");const f="src-tauri/tauri.conf.json";const c=JSON.parse(fs.readFileSync(f,"utf8"));c.version=process.argv[1];fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n")' "${{ needs.create.outputs.version }}"
       - run: node scripts/fetch-sidecars.mjs --target ${{ matrix.target }}
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -58,7 +73,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target ${{ matrix.target }}
-          tagName: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
-          releaseName: QuillTex ${{ inputs.tag || github.ref_name }}
-          releaseDraft: false
+          releaseId: ${{ needs.create.outputs.release_id }}
           includeUpdaterJson: true
+
+  publish:
+    needs: [create, build]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${{ needs.create.outputs.version }}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
