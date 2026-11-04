@@ -128,7 +128,7 @@ function followTool(key: string, toolId: string) {
     .get(key)
     .messages.flatMap((m) => m.parts)
     .find((p) => p.kind === "tool" && p.id === toolId);
-  if (part?.kind !== "tool" || part.name.replace(/^mcp__folio__/, "") !== "rename_project") return;
+  if (part?.kind !== "tool" || part.name.replace(/^mcp__quilltex__/, "") !== "rename_project") return;
   const { project, new_name } = part.input as { project?: string; new_name?: string };
   if (project && new_name?.trim()) void useProject.getState().followRename(project, new_name.trim());
 }
@@ -254,7 +254,7 @@ export function ChatPanel() {
           <div style={{ marginTop: "auto" }}>
             <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>How can I help?</div>
             <div className="muted">
-              I can create and edit projects, write LaTeX, fix compile errors and commit, all through Folio’s own tools.
+              I can create and edit projects, write LaTeX, fix compile errors and commit, all through QuillTex’s own tools.
             </div>
             <div className="suggestions">
               {SUGGESTIONS.map((s) => (
@@ -393,7 +393,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function ToolCard({ part }: { part: Extract<Part, { kind: "tool" }> }) {
-  const short = part.name.replace(/^mcp__folio__/, "");
+  const short = part.name.replace(/^mcp__quilltex__/, "");
   const arg = (part.input.path ?? part.input.name ?? part.input.project ?? part.input.message ?? "") as string;
   const open = () => {
     const proj = part.input.project as string | undefined;

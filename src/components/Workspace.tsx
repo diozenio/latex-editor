@@ -53,7 +53,7 @@ export function Workspace() {
   const sync = useApp((s) => (project ? s.sync[project.name] : undefined));
   const [split, setSplit] = useState(() => {
     try {
-      return Number(localStorage.getItem("folio.split")) || 0.5;
+      return Number(localStorage.getItem("quilltex.split")) || 0.5;
     } catch {
       return 0.5;
     }
@@ -71,7 +71,7 @@ export function Workspace() {
     const up = () => {
       setDragging(false);
       try {
-        localStorage.setItem("folio.split", String(split));
+        localStorage.setItem("quilltex.split", String(split));
       } catch {
         /* ignore */
       }
@@ -316,7 +316,7 @@ function Logs() {
 }
 
 function StatusBar({ errors }: { errors: number }) {
-  const { result, compiling, project, cursorLine, active, docs, forwardSearch } = useProject();
+  const { result, compiling, compileStatus, project, cursorLine, active, docs, forwardSearch } = useProject();
   const toggle = useApp((s) => s.toggle);
   const warnings = result?.diagnostics.filter((d) => d.severity === "warning").length ?? 0;
   const words = useMemo(() => {
@@ -335,7 +335,7 @@ function StatusBar({ errors }: { errors: number }) {
       <button onClick={() => toggle("logs")}>
         {compiling ? (
           <>
-            <Loader2 size={11} className="spin" /> Compiling
+            <Loader2 size={11} className="spin" /> {compileStatus ?? "Compiling"}
           </>
         ) : result ? (
           result.ok ? (

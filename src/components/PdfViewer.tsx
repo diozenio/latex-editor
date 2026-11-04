@@ -42,7 +42,7 @@ export function PdfViewer() {
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [zoom, setZoom] = useState<Zoom>(() => {
     try {
-      const z = localStorage.getItem("folio.pdfZoom");
+      const z = localStorage.getItem("quilltex.pdfZoom");
       return z && z !== "fit" ? Number(z) : "fit";
     } catch {
       return "fit";
@@ -116,7 +116,7 @@ export function PdfViewer() {
   const setZoomPersist = (z: Zoom) => {
     setZoom(z);
     try {
-      localStorage.setItem("folio.pdfZoom", String(z));
+      localStorage.setItem("quilltex.pdfZoom", String(z));
     } catch {
       /* ignore */
     }
