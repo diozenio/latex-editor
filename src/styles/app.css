@@ -395,6 +395,9 @@ button {
 .search-field span {
   flex: 1;
 }
+.search-field .kbd {
+  flex: none;
+}
 .search-field input {
   flex: 1;
   border: 0;
@@ -591,6 +594,8 @@ button.tag:hover {
   color: var(--text-secondary);
   font-size: var(--text-sm);
   font-weight: 500;
+  white-space: nowrap;
+  min-width: 0;
 }
 .seg button.on {
   background: var(--bg-elevated);
