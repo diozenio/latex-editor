@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 export type Engine = "tectonic" | "latexmk-pdflatex" | "latexmk-xelatex" | "latexmk-lualatex";
 
 export interface ProjectMeta {
+  id: string;
   mainFile: string;
   engine: Engine;
   color: string;
@@ -15,6 +16,18 @@ export interface ProjectSummary {
   meta: ProjectMeta;
   modified: number;
   hasGit: boolean;
+}
+
+export interface UsageWindow {
+  kind: "five_hour" | "seven_day";
+  /** 0..1 of the plan limit. */
+  utilization: number;
+  /** Unix seconds. */
+  resetsAt: number;
+  totalTokens: number;
+  folioTokens: number;
+  /** Claude Code doesn't report a token limit; this is derived from spend / utilization. */
+  estimatedLimit: number | null;
 }
 
 export interface FileNode {
@@ -225,6 +238,7 @@ export const api = {
   chatSend: (chatId: string, message: string, sessionId: string | null, context: string) =>
     invoke<void>("chat_send", { chatId, message, sessionId, context }),
   chatCancel: (chatId: string) => invoke<void>("chat_cancel", { chatId }),
+  claudeUsage: (refresh: boolean) => invoke<UsageWindow[]>("claude_usage", { refresh }),
   chatLoad: <T>(key: string) => invoke<T | null>("chat_load", { key }),
   chatSave: (key: string, data: unknown) => invoke<void>("chat_save", { key, data }),
   mcpRegister: () => invoke<void>("mcp_register"),

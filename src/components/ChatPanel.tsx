@@ -4,7 +4,7 @@ import { ArrowUp, Check, Loader2, Plus, Sparkles, Square, Wrench, X, AlertCircle
 import { create } from "zustand";
 import { api, errorMessage } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
-import { onProjectRenamed, useProject } from "@/stores/project";
+import { useProject } from "@/stores/project";
 
 type Part =
   | { kind: "text"; text: string }
@@ -39,33 +39,6 @@ const useChats = create<ChatStore>((set, get) => ({
 
 // One stream state per running chat.
 const streams = new Map<string, { sawDelta: boolean }>();
-/** A running process keeps the id it started with; renaming its project moves the chat to a new key. */
-const aliases = new Map<string, string>();
-const chatKey = (id: string) => aliases.get(id) ?? id;
-const processId = (key: string) => [...aliases].find(([, k]) => k === key)?.[0] ?? key;
-
-onProjectRenamed((from, to) => {
-  const a = `project-${from}`;
-  const b = `project-${to}`;
-  const s = useChats.getState();
-  const chat = s.chats[a];
-  if (!chat) {
-    // Never opened this session: move the saved history.
-    void api.chatLoad<Chat>(a).then((c) => {
-      if (!c) return;
-      void api.chatSave(b, c);
-      void api.chatSave(a, null);
-    });
-    return;
-  }
-  const { [a]: _, ...chats } = s.chats;
-  const { [a]: running, ...rest } = s.running;
-  useChats.setState({ chats: { ...chats, [b]: chat }, running: { ...rest, [b]: !!running } });
-  for (const [id, k] of aliases) if (k === a) aliases.set(id, b);
-  if (running && !aliases.has(a)) aliases.set(a, b);
-  void api.chatSave(b, chat);
-  void api.chatSave(a, null);
-});
 
 function update(key: string, fn: (msgs: Msg[]) => Msg[], sessionId?: string) {
   const s = useChats.getState();
@@ -89,7 +62,7 @@ function appendText(m: Msg, text: string): Msg {
 function handleEvent(id: string, ev: any) {
   const st = streams.get(id) ?? { sawDelta: false };
   streams.set(id, st);
-  const key = chatKey(id);
+  const key = id;
   switch (ev.type) {
     case "system":
       if (ev.session_id) update(key, (m) => m, ev.session_id);
@@ -167,8 +140,7 @@ function ensureListeners() {
   void listen<{ chatId: string; event: unknown }>("chat-event", (e) => handleEvent(e.payload.chatId, e.payload.event));
   void listen<{ chatId: string; ok: boolean; error: string | null }>("chat-done", (e) => {
     const { chatId, error } = e.payload;
-    const key = chatKey(chatId);
-    aliases.delete(chatId);
+    const key = chatId;
     const s = useChats.getState();
     s.setRunning(key, false);
     streams.delete(chatId);
@@ -204,7 +176,8 @@ export function ChatPanel() {
   const model = useApp((s) => s.settings?.chatModel ?? "");
   const saveSettings = useApp((s) => s.saveSettings);
   const project = useProject((s) => s.project);
-  const key = project ? `project-${project.name}` : "global";
+  // Keyed by the project's stable id, so renames keep the chat and a new project reusing a name starts clean.
+  const key = project?.meta.id ? `project-${project.meta.id}` : "global";
   const chat = useChats((s) => s.chats[key]) ?? { messages: [], sessionId: null };
   const running = useChats((s) => !!s.running[key]);
   const [input, setInput] = useState("");
@@ -345,7 +318,7 @@ export function ChatPanel() {
               ))}
             </select>
             {running ? (
-              <button className="send-btn" title="Stop" onClick={() => api.chatCancel(processId(key))}>
+              <button className="send-btn" title="Stop" onClick={() => api.chatCancel(key)}>
                 <Square size={11} fill="currentColor" />
               </button>
             ) : (

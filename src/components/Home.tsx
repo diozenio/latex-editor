@@ -90,7 +90,9 @@ export function projectMenu(name: string): MenuEntry[] {
           confirm: "Move to Trash",
           danger: true,
           onConfirm: async () => {
+            const id = await api.projectSummary(name).then((p) => p.meta.id, () => "");
             await api.deleteProject(name);
+            if (id) void api.chatSave(`project-${id}`, null);
             if (useApp.getState().current === name) app.openProject(null);
             await app.refreshProjects();
           },

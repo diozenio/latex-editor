@@ -70,11 +70,6 @@ const writeChains = new Map<string, Promise<void>>();
 const AUTOSAVE_MS = 250;
 let compileTimer: ReturnType<typeof setTimeout> | undefined;
 let compileQueued = false;
-const renameListeners = new Set<(from: string, to: string) => void>();
-
-export function onProjectRenamed(fn: (from: string, to: string) => void) {
-  renameListeners.add(fn);
-}
 
 export function projectExists(name: string) {
   return api.projectSummary(name).then(
@@ -135,7 +130,6 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   async followRename(from, to) {
     if (from === to || get().project?.name === to) return; // already followed
-    renameListeners.forEach((fn) => fn(from, to));
     moveTabs(from, to);
     const app = useApp.getState();
     if (get().project?.name === from) {
