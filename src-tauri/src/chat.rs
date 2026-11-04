@@ -82,6 +82,10 @@ pub fn chat_send(
         .args(["--strict-mcp-config", "--allowedTools", "mcp__folio", "--disallowedTools", DISALLOWED])
         .arg("--append-system-prompt")
         .arg(system);
+    let model = state.settings().chat_model;
+    if !model.is_empty() {
+        cmd.args(["--model", &model]);
+    }
     if let Some(sid) = session_id.filter(|s| !s.is_empty()) {
         cmd.args(["--resume", &sid]);
     }
