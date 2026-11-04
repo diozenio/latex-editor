@@ -8,7 +8,7 @@ Editor LaTeX local-first (Tauri 2 + React + Rust). Veja o `README.md` para a vis
 - `src-tauri/` — app Tauri (comandos, updater).
 - `crates/core` (`quilltex-core`) — lógica de projetos, compilação, git.
 - `crates/mcp` (`quilltex-mcp`) — servidor MCP usado pelo assistente.
-- `scripts/` — `fetch-sidecars.mjs` baixa Tectonic e compila o sidecar MCP.
+- `scripts/` — `fetch-sidecars.mjs` baixa Tectonic, compila o sidecar MCP e prepara os motores embutidos (`src-tauri/resources/`: cache do Tectonic e TinyTeX com os pacotes dos templates).
 
 ## Comandos
 
