@@ -100,6 +100,10 @@ function General() {
         <label>Projects folder</label>
         <div className="row">
           <input
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
             className="input mono"
             readOnly
             value={settings.projectsRoot}
@@ -161,6 +165,10 @@ function General() {
         <div className="field grow">
           <label>Commit author name</label>
           <input
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
             className="input"
             placeholder={settings.githubUser?.name || "From GitHub"}
             defaultValue={settings.gitName}
@@ -170,6 +178,10 @@ function General() {
         <div className="field grow">
           <label>Commit author email</label>
           <input
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
             className="input"
             placeholder={settings.githubUser?.email || "From GitHub"}
             defaultValue={settings.gitEmail}
@@ -521,6 +533,10 @@ function ClaudeTab() {
       <div className="field">
         <label>Custom path to claude (optional)</label>
         <input
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
           className="input mono"
           placeholder="Auto-detect"
           defaultValue={settings.claudePath}

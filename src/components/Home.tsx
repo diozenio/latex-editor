@@ -173,7 +173,15 @@ export function Home() {
           <div className="grow" />
           <div className="search-field" style={{ width: 240 }}>
             <Search size={14} />
-            <input placeholder="Filter projects" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              placeholder="Filter projects"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
         </div>
 

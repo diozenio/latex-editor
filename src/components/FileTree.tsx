@@ -563,6 +563,10 @@ function InlineInput({
   };
   return (
     <input
+      spellCheck={false}
+      autoCorrect="off"
+      autoCapitalize="off"
+      autoComplete="off"
       ref={ref}
       className="tree-rename"
       defaultValue={initial}

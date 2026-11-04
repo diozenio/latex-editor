@@ -394,6 +394,10 @@ export function ChatPanel() {
       <div className="chat-input">
         <div className="chat-box">
           <textarea
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
             rows={2}
             placeholder={
               project

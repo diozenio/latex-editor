@@ -229,6 +229,10 @@ export function GitPanel() {
 
       <div className="chat-box" style={{ padding: "6px 6px 6px 10px", marginTop: 2 }}>
         <textarea
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
           rows={2}
           placeholder={`Commit message (${mod}↵)`}
           value={message}

@@ -138,6 +138,10 @@ function NewProject({ onClose }: { onClose: () => void }) {
       <div className="field">
         <label>Name</label>
         <input
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
           className="input"
           autoFocus
           value={name}
@@ -244,6 +248,10 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
           <div className="search-field">
             <Search size={14} />
             <input
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
               autoFocus
               placeholder="Search repositories"
               value={query}
@@ -292,6 +300,10 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
         <div className="field grow">
           <label>Repository URL</label>
           <input
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
             className="input"
             placeholder="https://github.com/user/repo.git"
             value={url}
@@ -301,6 +313,10 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
         <div className="field" style={{ width: 200 }}>
           <label>Project name</label>
           <input
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
             className="input"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -399,6 +415,10 @@ function Publish({
       <div className="field">
         <label>Repository name</label>
         <input
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
           className="input"
           autoFocus
           value={name}
@@ -874,6 +894,10 @@ function Uninstall({ onClose }: { onClose: () => void }) {
                 Type <span className="mono">delete</span> to confirm
               </label>
               <input
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
                 className="input"
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
@@ -931,6 +955,10 @@ function Prompt({
       <div className="field">
         {d.label && <label>{d.label}</label>}
         <input
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
           className="input"
           autoFocus
           value={value}
