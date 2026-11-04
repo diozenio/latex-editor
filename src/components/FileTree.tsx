@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   ChevronRight,
@@ -46,6 +46,11 @@ export function FileTree() {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState<Editing>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  // Last clicked row; decides where "New file"/"New folder" create.
+  const [focused, setFocused] = useState<string | null>(null);
+  const [drag, setDrag] = useState<{ node: FileNode; x: number; y: number } | null>(null);
+  const suppressClick = useRef(false);
+  const treeRef = useRef<HTMLDivElement>(null);
   const app = useApp();
 
   const marks = useMemo(() => {
@@ -122,12 +127,109 @@ export function FileTree() {
     }
   };
 
+  const canMove = (from: string, toDir: string) =>
+    dirname(from) !== toDir && toDir !== from && !toDir.startsWith(from + "/");
+
   const move = async (from: string, toDir: string) => {
+    if (!canMove(from, toDir)) return;
     const to = join(toDir, basename(from));
-    if (to === from || toDir === from || toDir.startsWith(from + "/")) return;
     await run(() => api.renamePath(name, from, to));
     useProject.getState().renamed(from, to);
+    const remap = (p: string) => (p === from ? to : p.startsWith(from + "/") ? to + p.slice(from.length) : p);
+    setExpanded((prev) => {
+      const next = new Set([...prev].map(remap));
+      if (toDir) next.add(toDir);
+      return next;
+    });
+    setFocused((f) => (f ? remap(f) : f));
   };
+
+  // Folder that new files/folders go into: the focused folder, or the focused file's folder.
+  const findNode = (nodes: FileNode[], path: string): FileNode | undefined => {
+    for (const n of nodes) {
+      if (n.path === path) return n;
+      if (n.isDir && path.startsWith(n.path + "/")) return findNode(n.children ?? [], path);
+    }
+  };
+  const targetDir = () => {
+    if (!focused) return "";
+    const node = findNode(tree, focused);
+    if (!node) return "";
+    return node.isDir ? node.path : dirname(node.path);
+  };
+  const startCreate = (mode: "new-file" | "new-folder", dir = targetDir()) => {
+    if (dir) setExpanded((prev) => new Set(prev).add(dir));
+    setEditing({ mode, dir });
+  };
+
+  // Internal moves use pointer events: HTML5 drag is intercepted by the webview's
+  // native file drop handler (which shows the full-screen import overlay).
+  const beginDrag = (e: ReactMouseEvent, n: FileNode) => {
+    if (e.button !== 0 || editing) return;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let started = false;
+    let target: string | null = null;
+    let hoverDir: string | null = null;
+    let expandTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!started) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+        started = true;
+        document.body.classList.add("tree-dragging");
+      }
+      setDrag({ node: n, x: ev.clientX, y: ev.clientY });
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const dirEl = el?.closest(".tree [data-dir]");
+      const dir = dirEl ? dirEl.getAttribute("data-dir") ?? "" : null;
+      target = dir !== null && canMove(n.path, dir) ? dir : null;
+      setDropTarget(target);
+      // Hovering a closed folder for a moment opens it.
+      const row = el?.closest(".tree-row[data-folder]");
+      const folder = row?.getAttribute("data-folder") ?? null;
+      if (folder !== hoverDir) {
+        hoverDir = folder;
+        clearTimeout(expandTimer);
+        if (folder) expandTimer = setTimeout(() => setExpanded((prev) => new Set(prev).add(folder)), 600);
+      }
+    };
+    const end = (commit: boolean) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("keydown", onKey);
+      clearTimeout(expandTimer);
+      if (!started) return;
+      document.body.classList.remove("tree-dragging");
+      suppressClick.current = true;
+      setTimeout(() => (suppressClick.current = false));
+      setDrag(null);
+      setDropTarget(null);
+      if (commit && target !== null) void move(n.path, target);
+    };
+    const onUp = () => end(true);
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") end(false);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("keydown", onKey);
+  };
+
+  const confirmDelete = (node: FileNode) =>
+    app.openDialog({
+      kind: "confirm",
+      title: `Delete “${node.name}”?`,
+      message: "It will be moved to your system Trash.",
+      confirm: "Move to Trash",
+      danger: true,
+      onConfirm: () =>
+        run(async () => {
+          useProject.getState().removed(node.path);
+          await api.deletePath(name, node.path);
+          setFocused((f) => (f === node.path || f?.startsWith(node.path + "/") ? null : f));
+        }),
+    });
 
   const menuFor = (node: FileNode | null): MenuEntry[] => {
     const dir = node ? (node.isDir ? node.path : dirname(node.path)) : "";
@@ -135,18 +237,12 @@ export function FileTree() {
       {
         label: "New file",
         icon: <FilePlus2 size={14} />,
-        onSelect: () => {
-          if (dir) setExpanded(new Set(expanded).add(dir));
-          setEditing({ mode: "new-file", dir });
-        },
+        onSelect: () => startCreate("new-file", dir),
       },
       {
         label: "New folder",
         icon: <FolderPlus size={14} />,
-        onSelect: () => {
-          if (dir) setExpanded(new Set(expanded).add(dir));
-          setEditing({ mode: "new-folder", dir });
-        },
+        onSelect: () => startCreate("new-folder", dir),
       },
     ];
     if (!node) return items;
@@ -179,19 +275,7 @@ export function FileTree() {
         label: "Move to Trash",
         icon: <Trash2 size={14} />,
         danger: true,
-        onSelect: () =>
-          app.openDialog({
-            kind: "confirm",
-            title: `Delete “${node.name}”?`,
-            message: "It will be moved to your system Trash.",
-            confirm: "Move to Trash",
-            danger: true,
-            onConfirm: () =>
-              run(async () => {
-                useProject.getState().removed(node.path);
-                await api.deletePath(name, node.path);
-              }),
-          }),
+        onSelect: () => confirmDelete(node),
       },
     );
     return items;
@@ -214,28 +298,21 @@ export function FileTree() {
         <div key={n.path}>
           <ContextMenu items={menuFor(n)}>
             <div
-              className={`tree-row${active === n.path ? " active" : ""}${dropTarget === n.path ? " drop-target" : ""}`}
+              className={`tree-row${active === n.path ? " active" : ""}${focused === n.path ? " focused" : ""}${dropTarget === n.path ? " drop-target" : ""}${drag?.node.path === n.path ? " dragging" : ""}`}
               style={{ paddingLeft: 8 + depth * 14 }}
               data-dir={n.isDir ? n.path : dirname(n.path)}
-              draggable={!isEditing}
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/folio-path", n.path);
-                e.dataTransfer.effectAllowed = "move";
+              data-folder={n.isDir && !open ? n.path : undefined}
+              onMouseDown={(e) => !isEditing && beginDrag(e, n)}
+              onClick={() => {
+                if (suppressClick.current) return;
+                setFocused(n.path);
+                if (n.isDir) toggle(n.path);
+                // Opening a file focuses the editor; keep focus here so keyboard actions apply to the tree.
+                else void openFile(n.path).then(() => requestAnimationFrame(() => treeRef.current?.focus()));
               }}
-              onDragOver={(e) => {
-                if (!e.dataTransfer.types.includes("text/folio-path")) return;
-                e.preventDefault();
-                setDropTarget(n.isDir ? n.path : null);
+              onDoubleClick={() => {
+                if (!n.isDir) document.querySelector<HTMLElement>(".cm-content")?.focus();
               }}
-              onDragLeave={() => setDropTarget(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDropTarget(null);
-                const from = e.dataTransfer.getData("text/folio-path");
-                if (from) void move(from, n.isDir ? n.path : dirname(n.path));
-              }}
-              onClick={() => (n.isDir ? toggle(n.path) : openFile(n.path))}
             >
               {n.isDir ? <ChevronRight size={13} className={`chev${open ? " open" : ""}`} /> : <span className="chev" />}
               {n.isDir ? (
@@ -273,20 +350,38 @@ export function FileTree() {
   return (
     <ContextMenu items={menuFor(null)}>
       <div
+        ref={treeRef}
         className={`tree${dropTarget === "" ? " drop-root" : ""}`}
         data-dir=""
-        style={{ minHeight: "100%" }}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes("text/folio-path")) e.preventDefault();
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          if (editing || !focused || e.target !== e.currentTarget) return;
+          if (e.key === "Delete" || e.key === "Backspace") {
+            const node = findNode(tree, focused);
+            if (!node) return;
+            e.preventDefault();
+            confirmDelete(node);
+          }
         }}
-        onDrop={(e) => {
-          const from = e.dataTransfer.getData("text/folio-path");
-          if (from) void move(from, "");
+        onClick={(e) => {
+          // Clicking the empty area collapses the focused folder and resets creation to the root.
+          if (e.target !== e.currentTarget) return;
+          if (focused) {
+            const node = findNode(tree, focused);
+            if (node?.isDir && expanded.has(node.path)) toggle(node.path);
+          }
+          setFocused(null);
         }}
       >
         {editing && editing.mode !== "rename" && editing.dir === "" && renderEditRow(0, editing.mode)}
         {renderNodes(tree, 0)}
-        <TreeActions onNewFile={() => setEditing({ mode: "new-file", dir: "" })} onNewFolder={() => setEditing({ mode: "new-folder", dir: "" })} />
+        <TreeActions onNewFile={() => startCreate("new-file")} onNewFolder={() => startCreate("new-folder")} />
+        {drag && (
+          <div className="tree-drag-ghost" style={{ left: drag.x + 12, top: drag.y + 8 }}>
+            {drag.node.isDir ? <Folder size={13} className="file-icon" /> : fileIcon(drag.node.name, 13)}
+            {drag.node.name}
+          </div>
+        )}
       </div>
     </ContextMenu>
   );

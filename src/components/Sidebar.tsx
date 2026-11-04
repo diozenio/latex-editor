@@ -80,7 +80,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      <div className="sidebar-body">
+      <div className={`sidebar-body${project && ui.sidebarTab === "files" ? " files" : ""}`}>
         {project ? (
           <>
             <div className="seg">
