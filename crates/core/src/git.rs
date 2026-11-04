@@ -40,6 +40,16 @@ pub struct Commit {
     pub summary: String,
     pub author: String,
     pub time: i64,
+    /// Reachable from a remote branch, so rewriting it would diverge.
+    pub pushed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitFile {
+    pub path: String,
+    /// "new" | "modified" | "deleted" | "typechange"
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -328,6 +338,18 @@ fn conflicted(git: &Git) -> Vec<String> {
         .collect()
 }
 
+/// Fallback identity so a commit never fails for lack of one.
+fn identity_args(git: &Git) -> Vec<&'static str> {
+    let mut args = Vec::new();
+    if git.line(&["config", "user.name"]).is_none() {
+        args.extend(["-c", "user.name=Folio"]);
+    }
+    if git.line(&["config", "user.email"]).is_none() {
+        args.extend(["-c", "user.email=folio@localhost"]);
+    }
+    args
+}
+
 pub fn commit(ws: &Workspace, project: &str, message: &str) -> Result<String> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -339,14 +361,7 @@ pub fn commit(ws: &Workspace, project: &str, message: &str) -> Result<String> {
     if !merging && !unborn && git.ok(&["diff", "--cached", "--quiet"]) {
         return Err(Error::Other("nothing to commit".into()));
     }
-    let mut args = Vec::new();
-    // Fallback identity so a commit never fails for lack of one.
-    if git.line(&["config", "user.name"]).is_none() {
-        args.extend(["-c", "user.name=Folio"]);
-    }
-    if git.line(&["config", "user.email"]).is_none() {
-        args.extend(["-c", "user.email=folio@localhost"]);
-    }
+    let mut args = identity_args(&git);
     args.extend(["commit", "-q", "--no-edit", "-m", message]);
     if unborn {
         args.push("--allow-empty");
@@ -362,6 +377,12 @@ pub fn log(ws: &Workspace, project: &str, limit: usize) -> Result<Vec<Commit>> {
         return Ok(vec![]);
     }
     let out = git.run(&["log", &format!("-n{limit}"), "--format=%H%x1f%s%x1f%an%x1f%ct%x1e"])?;
+    let unpushed: std::collections::HashSet<String> = git
+        .run(&["rev-list", &format!("-n{limit}"), "HEAD", "--not", "--remotes"])
+        .unwrap_or_default()
+        .lines()
+        .map(String::from)
+        .collect();
     Ok(out
         .split('\x1e')
         .filter_map(|rec| {
@@ -373,9 +394,50 @@ pub fn log(ws: &Workspace, project: &str, limit: usize) -> Result<Vec<Commit>> {
                 summary: summary.to_string(),
                 author: author.to_string(),
                 time: time.trim().parse::<i64>().unwrap_or(0) * 1000,
+                pushed: !unpushed.contains(id),
             })
         })
         .collect())
+}
+
+/// Full id of a commit, rejecting anything that isn't a plain hex id.
+fn resolve_commit(git: &Git, id: &str) -> Result<String> {
+    if id.len() < 4 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::NotFound(format!("commit {id}")));
+    }
+    git.line(&["rev-parse", "--verify", "-q", &format!("{id}^{{commit}}")])
+        .ok_or_else(|| Error::NotFound(format!("commit {id}")))
+}
+
+/// Files a commit changed (against its first parent, if any).
+pub fn commit_files(ws: &Workspace, project: &str, id: &str) -> Result<Vec<CommitFile>> {
+    let dir = ws.project_dir(project)?;
+    let git = open(&dir)?;
+    let id = resolve_commit(&git, id)?;
+    let out = git.run(&[
+        "diff-tree", "-r", "--root", "--no-commit-id", "--name-status", "-z", "--no-renames", "-m", "--first-parent", &id,
+    ])?;
+    let mut parts = out.split('\0').filter(|p| !p.is_empty());
+    let mut files = Vec::new();
+    while let (Some(status), Some(path)) = (parts.next(), parts.next()) {
+        let kind = match status.as_bytes()[0] {
+            b'A' => "new",
+            b'D' => "deleted",
+            b'T' => "typechange",
+            _ => "modified",
+        };
+        files.push(CommitFile { path: path.into(), kind: kind.into() });
+    }
+    Ok(files)
+}
+
+/// Unified diff of one file in a commit.
+pub fn commit_diff(ws: &Workspace, project: &str, id: &str, path: &str) -> Result<String> {
+    ws.resolve(project, path)?;
+    let dir = ws.project_dir(project)?;
+    let git = open(&dir)?;
+    let id = resolve_commit(&git, id)?;
+    git.run(&["show", "--format=", "--no-color", "--no-ext-diff", "-m", "--first-parent", &id, "--", path])
 }
 
 /// Unified diff of the working tree vs HEAD for a single file.
@@ -689,5 +751,190 @@ mod tests {
         assert!(matches!(pull(&ws, "a").unwrap(), MergeOutcome::FastForward));
         assert!(ws.root().join("a/new.tex").exists());
         assert_eq!(status(&ws, "a").unwrap().behind, 0);
+    }
+}
+
+// ---------- rewriting history ----------
+
+/// History actions start from a tree with no uncommitted work to lose.
+fn require_clean(git: &Git, dir: &Path) -> Result<()> {
+    if dir.join(".git/MERGE_HEAD").exists() {
+        return Err(Error::Other("finish or abort the merge first".into()));
+    }
+    if !git.ok(&["diff-index", "--quiet", "HEAD", "--"]) {
+        return Err(Error::Other("commit or discard your changes first".into()));
+    }
+    Ok(())
+}
+
+fn is_pushed(git: &Git, commit: &str) -> bool {
+    git.line(&["branch", "-r", "--contains", commit]).is_some()
+}
+
+/// A commit that is in HEAD's history.
+fn resolve_in_history(git: &Git, id: &str) -> Result<String> {
+    let id = resolve_commit(git, id)?;
+    if !git.ok(&["merge-base", "--is-ancestor", &id, "HEAD"]) {
+        return Err(Error::Other("that commit is not in the current branch".into()));
+    }
+    Ok(id)
+}
+
+/// Make the files match an earlier commit and record that as a new commit,
+/// so nothing is lost from the history.
+pub fn restore_version(ws: &Workspace, project: &str, id: &str) -> Result<String> {
+    let dir = ws.project_dir(project)?;
+    let git = open(&dir)?;
+    require_clean(&git, &dir)?;
+    let id = resolve_commit(&git, id)?;
+    git.run(&["read-tree", "--reset", "-u", &id])?;
+    if git.ok(&["diff", "--cached", "--quiet"]) {
+        return Err(Error::Other("the project already matches this version".into()));
+    }
+    commit(ws, project, &format!("Restore version {}", &id[..7]))
+}
+
+/// Add a commit that undoes the given one.
+pub fn revert_commit(ws: &Workspace, project: &str, id: &str) -> Result<String> {
+    let dir = ws.project_dir(project)?;
+    let git = open(&dir)?;
+    require_clean(&git, &dir)?;
+    let id = resolve_in_history(&git, id)?;
+    let mut args = identity_args(&git);
+    args.extend(["revert", "--no-edit"]);
+    if git.line(&["rev-list", "--parents", "-n1", &id]).is_some_and(|l| l.split(' ').count() > 2) {
+        args.extend(["-m", "1"]);
+    }
+    args.push(&id);
+    if let Err(e) = git.run(&args) {
+        let _ = git.run(&["revert", "--abort"]);
+        return Err(Error::Other(format!("cannot undo this commit cleanly, later changes conflict with it ({e})")));
+    }
+    Ok(git.run(&["rev-parse", "HEAD"])?.trim().to_string())
+}
+
+/// Move the branch back to a commit, dropping everything after it.
+pub fn reset_to(ws: &Workspace, project: &str, id: &str) -> Result<()> {
+    let dir = ws.project_dir(project)?;
+    let git = open(&dir)?;
+    require_clean(&git, &dir)?;
+    let id = resolve_in_history(&git, id)?;
+    let newer = git.run(&["rev-list", "--reverse", &format!("{id}..HEAD")])?;
+    let Some(oldest) = newer.lines().next() else {
+        return Err(Error::Other("already at this commit".into()));
+    };
+    if is_pushed(&git, oldest) {
+        return Err(Error::Other("later commits were already pushed; rewriting them would diverge from the remote".into()));
+    }
+    git.run(&["reset", "-q", "--hard", &id])?;
+    Ok(())
+}
+
+/// Remove one commit, replaying the later ones on top of its parent.
+pub fn delete_commit(ws: &Workspace, project: &str, id: &str) -> Result<()> {
+    let dir = ws.project_dir(project)?;
+    let git = open(&dir)?;
+    require_clean(&git, &dir)?;
+    let id = resolve_in_history(&git, id)?;
+    let parents = git.run(&["rev-list", "--parents", "-n1", &id])?;
+    match parents.split_whitespace().count() {
+        1 => return Err(Error::Other("the first commit cannot be deleted".into())),
+        2 => {}
+        _ => return Err(Error::Other("merge commits cannot be deleted".into())),
+    }
+    if !git.run(&["rev-list", "--merges", &format!("{id}..HEAD")])?.trim().is_empty() {
+        return Err(Error::Other("a merge commit comes after this one, so it cannot be removed safely".into()));
+    }
+    if is_pushed(&git, &id) {
+        return Err(Error::Other("this commit was already pushed; rewriting it would diverge from the remote. Undo it instead".into()));
+    }
+    let parent = format!("{id}^");
+    if git.line(&["rev-parse", "HEAD"]).as_deref() == Some(id.as_str()) {
+        git.run(&["reset", "-q", "--hard", &parent])?;
+        return Ok(());
+    }
+    let mut args = identity_args(&git);
+    args.extend(["rebase", "-q", "--onto", &parent, &id]);
+    if let Err(e) = git.run(&args) {
+        let _ = git.run(&["rebase", "--abort"]);
+        return Err(Error::Other(format!("later commits depend on this one and conflict without it ({e})")));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+    use crate::files::write_text;
+
+    /// Project "p" with commits c1..c4, each adding fN.txt; returns ids newest first.
+    fn history() -> (tempfile::TempDir, Workspace, Vec<String>) {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(tmp.path()).unwrap();
+        crate::project::create(&ws, "p", "blank").unwrap();
+        init(&ws, "p", "t", "t@t").unwrap();
+        for i in 1..=4 {
+            write_text(&ws, "p", &format!("f{i}.txt"), &i.to_string()).unwrap();
+            stage_all(&ws, "p").unwrap();
+            commit(&ws, "p", &format!("c{i}")).unwrap();
+        }
+        let ids = log(&ws, "p", 10).unwrap().into_iter().map(|c| c.id).collect();
+        (tmp, ws, ids)
+    }
+
+    fn summaries(ws: &Workspace) -> Vec<String> {
+        log(ws, "p", 10).unwrap().into_iter().map(|c| c.summary).collect()
+    }
+
+    #[test]
+    fn lists_commit_files() {
+        let (_t, ws, ids) = history();
+        let files = commit_files(&ws, "p", &ids[1]).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!((files[0].path.as_str(), files[0].kind.as_str()), ("f3.txt", "new") as (&str, &str));
+        assert!(commit_diff(&ws, "p", &ids[1], "f3.txt").unwrap().contains("+3"));
+        assert!(commit_files(&ws, "p", "--oops").is_err());
+    }
+
+    #[test]
+    fn restore_keeps_history() {
+        let (_t, ws, ids) = history();
+        restore_version(&ws, "p", &ids[2]).unwrap();
+        let dir = ws.project_dir("p").unwrap();
+        assert!(dir.join("f2.txt").exists() && !dir.join("f3.txt").exists());
+        assert_eq!(summaries(&ws).len(), 5);
+        assert!(restore_version(&ws, "p", &ids[2]).is_err()); // already there
+    }
+
+    #[test]
+    fn delete_middle_and_head() {
+        let (_t, ws, ids) = history();
+        delete_commit(&ws, "p", &ids[1]).unwrap(); // c3
+        assert_eq!(summaries(&ws)[..3], ["c4", "c2", "c1"].map(String::from));
+        assert!(!ws.project_dir("p").unwrap().join("f3.txt").exists());
+        let head = log(&ws, "p", 1).unwrap().remove(0).id;
+        delete_commit(&ws, "p", &head).unwrap();
+        assert_eq!(summaries(&ws)[0], "c2");
+        let root = log(&ws, "p", 10).unwrap().pop().unwrap().id;
+        assert!(delete_commit(&ws, "p", &root).is_err());
+    }
+
+    #[test]
+    fn reset_and_revert() {
+        let (_t, ws, ids) = history();
+        revert_commit(&ws, "p", &ids[2]).unwrap(); // undo c2
+        assert!(!ws.project_dir("p").unwrap().join("f2.txt").exists());
+        reset_to(&ws, "p", &ids[2]).unwrap();
+        assert_eq!(summaries(&ws)[0], "c2");
+        assert!(reset_to(&ws, "p", &ids[2]).is_err());
+    }
+
+    #[test]
+    fn refuses_with_uncommitted_changes() {
+        let (_t, ws, ids) = history();
+        write_text(&ws, "p", "f1.txt", "edited").unwrap();
+        assert!(delete_commit(&ws, "p", &ids[1]).is_err());
+        assert!(reset_to(&ws, "p", &ids[2]).is_err());
+        assert!(restore_version(&ws, "p", &ids[2]).is_err());
     }
 }
