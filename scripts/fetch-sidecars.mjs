@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Prepares the sidecar binaries Tauri bundles with the app:
 //   src-tauri/binaries/tectonic-<triple>[.exe]   (downloaded)
-//   src-tauri/binaries/folio-mcp-<triple>[.exe]  (built from crates/mcp)
+//   src-tauri/binaries/quilltex-mcp-<triple>[.exe]  (built from crates/mcp)
 // Usage: node scripts/fetch-sidecars.mjs [--target <triple>] [--skip-mcp]
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, copyFileSync, chmodSync, rmSync, writeFileSync, readdirSync, statSync } from "node:fs";
@@ -62,7 +62,7 @@ async function fetchTectonic() {
   console.log(`↓ ${url}`);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`download failed: ${res.status}`);
-  const work = join(tmpdir(), `folio-tectonic-${Date.now()}`);
+  const work = join(tmpdir(), `quilltex-tectonic-${Date.now()}`);
   mkdirSync(work, { recursive: true });
   const archive = join(work, asset);
   writeFileSync(archive, Buffer.from(await res.arrayBuffer()));
@@ -77,10 +77,10 @@ async function fetchTectonic() {
 }
 
 function buildMcp() {
-  console.log("⚙ building folio-mcp");
-  execFileSync("cargo", ["build", "--release", "-p", "folio-mcp", "--target", target], { cwd: root, stdio: "inherit" });
-  const src = join(root, "target", target, "release", `folio-mcp${ext}`);
-  const dest = join(binDir, `folio-mcp-${target}${ext}`);
+  console.log("⚙ building quilltex-mcp");
+  execFileSync("cargo", ["build", "--release", "-p", "quilltex-mcp", "--target", target], { cwd: root, stdio: "inherit" });
+  const src = join(root, "target", target, "release", `quilltex-mcp${ext}`);
+  const dest = join(binDir, `quilltex-mcp-${target}${ext}`);
   copyFileSync(src, dest);
   console.log(`✓ ${dest}`);
 }
