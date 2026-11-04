@@ -8,10 +8,23 @@
       <stop offset="0" stop-color="#fff" stop-opacity=".28"/>
       <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
     </linearGradient>
+    <linearGradient id="vane" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#E4E2FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="-6" dy="10" stdDeviation="14" flood-color="#1E2A9E" flood-opacity=".32"/>
+    </filter>
   </defs>
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
   <rect x="318" y="250" width="388" height="524" rx="44" fill="#fff" opacity=".96"/>
   <path d="M392 380h240M392 452h240M392 524h160" stroke="#5B63F6" stroke-width="34" stroke-linecap="round"/>
-  <path d="M392 640c40-60 80-60 120 0s80 60 120 0" stroke="#5B63F6" stroke-width="30" fill="none" stroke-linecap="round" opacity=".55"/>
+  <path d="M392 650c36-56 72-56 108 0s72 56 108 0" stroke="#5B63F6" stroke-width="30" fill="none" stroke-linecap="round" opacity=".55"/>
+  <g transform="translate(612 650) rotate(36) scale(.8)" filter="url(#shadow)">
+    <path d="M0 0L-15-62L-13-112C-60-160-84-230-88-300L-60-292C-78-330-82-390-70-440C-52-500-16-528 0-548C34-506 76-420 80-318C82-276 76-238 64-206L40-222C34-170 24-136 13-112L15-62Z" fill="url(#vane)"/>
+    <path d="M0-24V-470" stroke="#5B63F6" stroke-width="12" stroke-linecap="round" opacity=".45"/>
+    <path d="M0 0L-15-62L-13-112H13L15-62Z" fill="#3B4BE0"/>
+    <path d="M0-4V-50" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+  </g>
 </svg>
