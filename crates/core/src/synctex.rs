@@ -57,7 +57,7 @@ impl SyncTex {
         let (mut xoff, mut yoff) = (0.0f64, 0.0f64);
         let mut page = 0u32;
         let mut in_content = false;
-        let canon_dir = project_dir.canonicalize().unwrap_or_else(|_| project_dir.to_path_buf());
+        let canon_dir = crate::paths::canonical(project_dir).unwrap_or_else(|_| project_dir.to_path_buf());
 
         for line in text.lines() {
             if !in_content {
@@ -171,7 +171,7 @@ impl SyncTex {
 fn normalize(path: &str, project_dir: &Path) -> String {
     let p = Path::new(path);
     let rel = if p.is_absolute() {
-        let canon = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        let canon = crate::paths::canonical(p).unwrap_or_else(|_| p.to_path_buf());
         canon.strip_prefix(project_dir).map(|r| r.to_path_buf()).unwrap_or(canon)
     } else {
         p.to_path_buf()

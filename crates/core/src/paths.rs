@@ -11,7 +11,7 @@ impl Workspace {
     pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         std::fs::create_dir_all(&root)?;
-        Ok(Self { root: root.canonicalize()? })
+        Ok(Self { root: canonical(&root)? })
     }
 
     pub fn default_root() -> PathBuf {
@@ -52,7 +52,7 @@ impl Workspace {
                 return Err(Error::OutsideRoot(path.display().to_string()));
             }
         }
-        let canon = existing.canonicalize()?;
+        let canon = canonical(&existing)?;
         if canon.starts_with(&self.root) {
             Ok(())
         } else {
@@ -66,6 +66,21 @@ impl Workspace {
             .strip_prefix(&base)
             .map_err(|_| Error::OutsideRoot(abs.display().to_string()))?;
         Ok(rel.to_string_lossy().replace('\\', "/"))
+    }
+}
+
+pub fn canonical(path: &Path) -> std::io::Result<PathBuf> {
+    Ok(without_verbatim(path.canonicalize()?))
+}
+
+fn without_verbatim(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) => PathBuf::from(rest),
+        None => path,
     }
 }
 
@@ -86,6 +101,14 @@ pub fn validate_name(name: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn drops_verbatim_prefix() {
+        let f = |s: &str| without_verbatim(PathBuf::from(s)).to_string_lossy().to_string();
+        assert_eq!(f(r"\\?\C:\Users\me\QuillTex"), r"C:\Users\me\QuillTex");
+        assert_eq!(f(r"\\?\UNC\server\share\QuillTex"), r"\\server\share\QuillTex");
+        assert_eq!(f("/Users/me/QuillTex"), "/Users/me/QuillTex");
+    }
 
     #[test]
     fn rejects_escapes() {
