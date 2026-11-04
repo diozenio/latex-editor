@@ -2049,3 +2049,65 @@ body.tree-dragging * {
     transition: none;
   }
 }
+
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: var(--s-4) 0;
+}
+.usage-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.usage-title h4 {
+  margin: 0;
+}
+.usage-window {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+.usage-head,
+.usage-numbers {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.usage-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-active);
+}
+.usage-bar .seg {
+  height: 100%;
+  transition: width var(--dur) var(--ease);
+}
+.usage-bar .seg.other,
+.usage-legend .dot.other {
+  background: var(--text-quaternary);
+}
+.usage-bar .seg.folio,
+.usage-legend .dot.folio {
+  background: var(--accent);
+}
+.usage-legend {
+  display: flex;
+  gap: var(--s-4);
+  color: var(--text-secondary);
+}
+.usage-legend .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}

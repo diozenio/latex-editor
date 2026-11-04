@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { CheckCircle2, Github, Loader2, Settings as Gear, Sparkles, Sigma, Trash2, XCircle, Copy, ExternalLink } from "lucide-react";
-import { api, errorMessage, type GithubUser, type LoginCode } from "@/lib/ipc";
+import { CheckCircle2, Github, Loader2, Settings as Gear, Sparkles, Sigma, Trash2, XCircle, Copy, ExternalLink, RefreshCw } from "lucide-react";
+import { api, errorMessage, type GithubUser, type LoginCode, type UsageWindow } from "@/lib/ipc";
+import { compactNumber } from "@/lib/format";
 import { useApp, type SettingsTab } from "@/stores/app";
 import { Dialog } from "./ui/Dialog";
 
@@ -275,6 +276,86 @@ function GithubTab() {
   );
 }
 
+const WINDOW_LABELS = { five_hour: "Current session (5 hours)", seven_day: "Weekly (7 days)" };
+
+function resetsIn(secs: number): string {
+  const m = Math.max(0, Math.round((secs * 1000 - Date.now()) / 60000));
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ${m % 60}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
+function UsageBar({ w }: { w: UsageWindow }) {
+  const pct = (f: number) => `${(Math.min(1, Math.max(0, f)) * 100).toFixed(1)}%`;
+  const folio = w.totalTokens ? w.utilization * (w.folioTokens / w.totalTokens) : 0;
+  const other = Math.max(0, w.utilization - folio);
+  const limit = w.estimatedLimit;
+  return (
+    <div className="usage-window">
+      <div className="usage-head">
+        <strong>{WINDOW_LABELS[w.kind]}</strong>
+        <span className="muted">resets in {resetsIn(w.resetsAt)}</span>
+      </div>
+      <div className="usage-bar" title={`${Math.round(w.utilization * 100)}% of the limit used`}>
+        <div className="seg other" style={{ width: pct(other) }} />
+        <div className="seg folio" style={{ width: pct(folio) }} />
+      </div>
+      <div className="usage-legend">
+        <span>
+          <i className="dot other" /> Everything else {compactNumber(w.totalTokens - w.folioTokens)}
+        </span>
+        <span>
+          <i className="dot folio" /> Folio {compactNumber(w.folioTokens)}
+        </span>
+      </div>
+      <div className="usage-numbers">
+        <span>
+          <strong>{w.totalTokens.toLocaleString()}</strong> tokens used · {Math.round(w.utilization * 100)}%
+        </span>
+        <span>{limit ? <>limit ≈ <strong>{limit.toLocaleString()}</strong> tokens</> : "limit unknown yet"}</span>
+      </div>
+    </div>
+  );
+}
+
+function UsageSection() {
+  const [windows, setWindows] = useState<UsageWindow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const load = async (refresh: boolean) => {
+    setLoading(true);
+    setError("");
+    try {
+      setWindows(await api.claudeUsage(refresh));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load(false);
+  }, []);
+  return (
+    <div className="usage">
+      <div className="usage-title">
+        <h4>Usage</h4>
+        <button className="btn sm" disabled={loading} onClick={() => load(true)}>
+          {loading ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />} Refresh
+        </button>
+      </div>
+      {windows?.map((w) => <UsageBar key={w.kind} w={w} />)}
+      {error && <span className="hint muted">{error}</span>}
+      {windows && (
+        <span className="hint muted" style={{ fontSize: 12 }}>
+          Percentages come from Claude Code. Claude doesn’t publish a token limit, so it is estimated from your recent
+          usage (input, output and cache-write tokens in the window), which is counted from Claude Code’s local history.
+        </span>
+      )}
+    </div>
+  );
+}
+
 function ClaudeTab() {
   const { info, settings, saveSettings, refreshInfo, toast } = useApp();
   const [busy, setBusy] = useState(false);
@@ -323,6 +404,7 @@ function ClaudeTab() {
         </div>
         <button className={`switch${settings.mcpRegistered ? " on" : ""}`} disabled={busy || !info?.claude} onClick={toggleMcp} />
       </div>
+      {info?.claude && <UsageSection />}
       <div className="banner blue">
         <span>
           The assistant only gets Folio’s tools (projects, files, compile, git). Shell, file system and web tools are

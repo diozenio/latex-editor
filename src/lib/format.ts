@@ -36,3 +36,8 @@ export function slug(s: string): string {
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
 }
+
+/** 1234 → "1.2K", 2_500_000 → "2.5M". */
+export function compactNumber(n: number): string {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
