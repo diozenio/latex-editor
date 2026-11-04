@@ -64,6 +64,12 @@ export interface Commit {
   summary: string;
   author: string;
   time: number;
+  pushed: boolean;
+}
+
+export interface CommitFile {
+  path: string;
+  kind: "new" | "modified" | "deleted" | "typechange";
 }
 
 export interface Branch {
@@ -187,6 +193,12 @@ export const api = {
   gitDiscard: (project: string, paths: string[]) => invoke<void>("git_discard", { project, paths }),
   gitCommit: (project: string, message: string) => invoke<string>("git_commit", { project, message }),
   gitLog: (project: string) => invoke<Commit[]>("git_log", { project }),
+  gitCommitFiles: (project: string, id: string) => invoke<CommitFile[]>("git_commit_files", { project, id }),
+  gitCommitDiff: (project: string, id: string, path: string) => invoke<string>("git_commit_diff", { project, id, path }),
+  gitRestoreVersion: (project: string, id: string) => invoke<string>("git_restore_version", { project, id }),
+  gitRevertCommit: (project: string, id: string) => invoke<string>("git_revert_commit", { project, id }),
+  gitResetTo: (project: string, id: string) => invoke<void>("git_reset_to", { project, id }),
+  gitDeleteCommit: (project: string, id: string) => invoke<void>("git_delete_commit", { project, id }),
   gitDiff: (project: string, path: string) => invoke<string>("git_diff", { project, path }),
   gitBranches: (project: string) => invoke<Branch[]>("git_branches", { project }),
   gitCreateBranch: (project: string, name: string) => invoke<void>("git_create_branch", { project, name }),

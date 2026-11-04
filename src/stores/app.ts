@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, errorMessage, type AppInfo, type ProjectSummary, type Settings, type SyncStatus } from "@/lib/ipc";
+import { api, errorMessage, type AppInfo, type Commit, type ProjectSummary, type Settings, type SyncStatus } from "@/lib/ipc";
 
 export type Dialog =
   | { kind: "new-project" }
@@ -7,6 +7,7 @@ export type Dialog =
   | { kind: "publish"; project: string }
   | { kind: "uninstall" }
   | { kind: "diff"; project: string; path: string }
+  | { kind: "commit"; project: string; commit: Commit }
   | { kind: "merge"; project: string }
   | { kind: "project-settings" }
   | {
