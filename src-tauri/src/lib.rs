@@ -66,6 +66,30 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window])
 }
 
+/// Gets both engines ready in the background, so the first compile does not
+/// wait on them: the bundled Tectonic cache is copied in and the bundled TeX
+/// Live unpacked (unless the user removed it). A compile that starts meanwhile
+/// waits for TeX Live's setup instead of repeating it.
+fn prepare_engines(app: &tauri::AppHandle) {
+    let state = app.state::<state::AppState>();
+    let tc = state.toolchain.read().unwrap().clone();
+    let seed = state.tectonic_seed.clone();
+    std::thread::spawn(move || {
+        if let (Some(seed), Some(cache)) = (seed, &tc.tectonic_cache) {
+            if let Err(e) = quilltex_core::compile::seed_tectonic_cache(&seed, cache) {
+                eprintln!("quilltex: could not seed the Tectonic cache: {e}");
+            }
+        }
+        if let (Some(root), Some(archive)) = (&tc.texlive, &tc.texlive_archive) {
+            if !quilltex_core::texlive::is_installed(root) && !quilltex_core::texlive::was_removed(root) {
+                if let Err(e) = quilltex_core::texlive::install(root, Some(archive), &|_| {}) {
+                    eprintln!("quilltex: could not set up TeX Live: {e}");
+                }
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env::fix_path();
@@ -108,6 +132,7 @@ pub fn run() {
             }
 
             watcher::restart(&handle);
+            prepare_engines(&handle);
             sync::start(handle);
             Ok(())
         })
