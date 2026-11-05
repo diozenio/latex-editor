@@ -3,6 +3,7 @@ mod commands;
 mod env;
 mod github;
 mod state;
+mod storage;
 mod sync;
 mod uninstall;
 mod usage;
@@ -12,56 +13,69 @@ use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
-    let app_menu = Submenu::with_items(app, "QuillTex", true, &[
-        &PredefinedMenuItem::about(app, Some("About QuillTex"), Some(AboutMetadata::default()))?,
+fn build_menu(
+    app: &tauri::AppHandle,
+    accels: &std::collections::HashMap<String, String>,
+    labels: &std::collections::HashMap<String, String>,
+) -> tauri::Result<Menu<tauri::Wry>> {
+    let l = |id: &str, default: &'static str| -> String { labels.get(id).cloned().unwrap_or_else(|| default.to_string()) };
+    let item = |id: &str, default: &'static str, accel: Option<String>| MenuItem::with_id(app, id, l(&format!("menu.{id}"), default), true, accel);
+    let acc = |id: &str, default: &str| -> Option<String> {
+        match accels.get(id) {
+            Some(v) if v.is_empty() => None,
+            Some(v) => Some(v.clone()),
+            None => Some(default.to_string()),
+        }
+    };
+    let app_menu = Submenu::with_items(app, l("menu.app", "QuillTex"), true, &[
+        &PredefinedMenuItem::about(app, Some(&l("menu.about", "About QuillTex")), Some(AboutMetadata::default()))?,
         &PredefinedMenuItem::separator(app)?,
-        &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
+        &item("settings", "Settings…", acc("settings", "CmdOrCtrl+,"))?,
         &PredefinedMenuItem::separator(app)?,
+        &item("storage", "Storage…", None)?,
         &item("uninstall", "Uninstall QuillTex…", None)?,
         &PredefinedMenuItem::separator(app)?,
-        &PredefinedMenuItem::hide(app, None)?,
-        &PredefinedMenuItem::hide_others(app, None)?,
+        &PredefinedMenuItem::hide(app, Some(&l("menu.hide", "Hide QuillTex")))?,
+        &PredefinedMenuItem::hide_others(app, Some(&l("menu.hideOthers", "Hide Others")))?,
         &PredefinedMenuItem::separator(app)?,
-        &PredefinedMenuItem::quit(app, None)?,
+        &PredefinedMenuItem::quit(app, Some(&l("menu.quit", "Quit QuillTex")))?,
     ])?;
-    let file = Submenu::with_items(app, "File", true, &[
-        &item("new-project", "New Project…", Some("CmdOrCtrl+Shift+N"))?,
-        &item("import-zip", "Import ZIP…", Some("CmdOrCtrl+Shift+O"))?,
+    let file = Submenu::with_items(app, l("menu.file", "File"), true, &[
+        &item("new-project", "New Project…", acc("new-project", "CmdOrCtrl+Shift+N"))?,
+        &item("import-zip", "Import ZIP…", acc("import-zip", "CmdOrCtrl+Shift+O"))?,
         &item("clone-repo", "Clone from GitHub…", None)?,
         &PredefinedMenuItem::separator(app)?,
-        &item("new-file", "New File", Some("CmdOrCtrl+N"))?,
-        &item("save", "Save", Some("CmdOrCtrl+S"))?,
+        &item("new-file", "New File", acc("new-file", "CmdOrCtrl+N"))?,
+        &item("save", "Save", acc("save", "CmdOrCtrl+S"))?,
         &PredefinedMenuItem::separator(app)?,
         &item("export-zip", "Export as ZIP…", None)?,
-        &item("download-pdf", "Download PDF…", Some("CmdOrCtrl+Shift+S"))?,
+        &item("download-pdf", "Download PDF…", acc("download-pdf", "CmdOrCtrl+Shift+S"))?,
         &PredefinedMenuItem::separator(app)?,
-        &PredefinedMenuItem::close_window(app, None)?,
+        &PredefinedMenuItem::close_window(app, Some(&l("menu.closeWindow", "Close Window")))?,
     ])?;
-    let edit = Submenu::with_items(app, "Edit", true, &[
-        &PredefinedMenuItem::undo(app, None)?,
-        &PredefinedMenuItem::redo(app, None)?,
+    let edit = Submenu::with_items(app, l("menu.edit", "Edit"), true, &[
+        &PredefinedMenuItem::undo(app, Some(&l("menu.undo", "Undo")))?,
+        &PredefinedMenuItem::redo(app, Some(&l("menu.redo", "Redo")))?,
         &PredefinedMenuItem::separator(app)?,
-        &PredefinedMenuItem::cut(app, None)?,
-        &PredefinedMenuItem::copy(app, None)?,
-        &PredefinedMenuItem::paste(app, None)?,
-        &PredefinedMenuItem::select_all(app, None)?,
+        &PredefinedMenuItem::cut(app, Some(&l("menu.cut", "Cut")))?,
+        &PredefinedMenuItem::copy(app, Some(&l("menu.copy", "Copy")))?,
+        &PredefinedMenuItem::paste(app, Some(&l("menu.paste", "Paste")))?,
+        &PredefinedMenuItem::select_all(app, Some(&l("menu.selectAll", "Select All")))?,
     ])?;
-    let view = Submenu::with_items(app, "View", true, &[
-        &item("command-palette", "Command Palette", Some("CmdOrCtrl+K"))?,
-        &item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+B"))?,
-        &item("toggle-pdf", "Toggle PDF", Some("CmdOrCtrl+Shift+P"))?,
-        &item("toggle-chat", "Toggle AI Assistant", Some("CmdOrCtrl+J"))?,
-        &item("toggle-git", "Source Control", Some("CmdOrCtrl+Shift+G"))?,
+    let view = Submenu::with_items(app, l("menu.view", "View"), true, &[
+        &item("command-palette", "Command Palette", acc("command-palette", "CmdOrCtrl+K"))?,
+        &item("toggle-sidebar", "Toggle Sidebar", acc("toggle-sidebar", "CmdOrCtrl+B"))?,
+        &item("toggle-pdf", "Toggle PDF", acc("toggle-pdf", "CmdOrCtrl+Shift+P"))?,
+        &item("toggle-chat", "Toggle AI Assistant", acc("toggle-chat", "CmdOrCtrl+J"))?,
+        &item("toggle-git", "Source Control", acc("toggle-git", "CmdOrCtrl+Shift+G"))?,
         &PredefinedMenuItem::separator(app)?,
-        &item("compile", "Compile", Some("CmdOrCtrl+Enter"))?,
+        &item("compile", "Compile", acc("compile", "CmdOrCtrl+Enter"))?,
         &PredefinedMenuItem::separator(app)?,
-        &PredefinedMenuItem::fullscreen(app, None)?,
+        &PredefinedMenuItem::fullscreen(app, Some(&l("menu.fullscreen", "Enter Full Screen")))?,
     ])?;
-    let window = Submenu::with_items(app, "Window", true, &[
-        &PredefinedMenuItem::minimize(app, None)?,
-        &PredefinedMenuItem::maximize(app, None)?,
+    let window = Submenu::with_items(app, l("menu.window", "Window"), true, &[
+        &PredefinedMenuItem::minimize(app, Some(&l("menu.minimize", "Minimize")))?,
+        &PredefinedMenuItem::maximize(app, Some(&l("menu.maximize", "Zoom")))?,
     ])?;
     Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window])
 }
@@ -86,6 +100,16 @@ fn prepare_engines(app: &tauri::AppHandle) {
     });
 }
 
+#[cfg(target_os = "macos")]
+pub fn apply_menu_accelerators(
+    app: &tauri::AppHandle,
+    accels: &std::collections::HashMap<String, String>,
+    labels: &std::collections::HashMap<String, String>,
+) -> tauri::Result<()> {
+    app.set_menu(build_menu(app, accels, labels)?)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env::fix_path();
@@ -100,7 +124,7 @@ pub fn run() {
             let handle = app.handle().clone();
             app.manage(state::AppState::init(&handle)?);
             #[cfg(target_os = "macos")]
-            app.set_menu(build_menu(&handle)?)?;
+            app.set_menu(build_menu(&handle, &Default::default(), &Default::default())?)?;
             app.on_menu_event(|app, event| {
                 let _ = app.emit("menu", event.id().as_ref());
             });
@@ -132,6 +156,7 @@ pub fn run() {
             commands::app_info,
             commands::get_settings,
             commands::save_settings,
+            commands::set_menu_accelerators,
             commands::list_projects,
             commands::list_templates,
             commands::unique_project_name,
@@ -200,6 +225,10 @@ pub fn run() {
             chat::chat_load,
             chat::chat_save,
             usage::claude_usage,
+            storage::storage_usage,
+            storage::installed_components,
+            storage::clear_tectonic_cache,
+            storage::remove_tex_package,
             chat::mcp_register,
             chat::mcp_unregister,
         ])

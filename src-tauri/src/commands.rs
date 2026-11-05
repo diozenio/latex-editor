@@ -74,6 +74,19 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings)
 }
 
 #[tauri::command]
+pub fn set_menu_accelerators(
+    app: AppHandle,
+    accels: std::collections::HashMap<String, String>,
+    labels: std::collections::HashMap<String, String>,
+) -> CmdResult<()> {
+    #[cfg(target_os = "macos")]
+    crate::apply_menu_accelerators(&app, &accels, &labels).map_err(err)?;
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, accels, labels);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn list_projects(state: State<AppState>) -> CmdResult<Vec<project::ProjectSummary>> {
     project::list(&state.ws()).map_err(err)
 }
