@@ -8,6 +8,13 @@ import {
   type Settings,
   type SyncStatus,
 } from "@/lib/ipc";
+import {
+  applyFontSize,
+  applyTheme,
+  loadCustomThemes,
+  persistCustomThemes,
+  type Theme,
+} from "@/lib/themes";
 
 export type Dialog =
   | { kind: "new-project" }
@@ -44,10 +51,11 @@ export interface Toast {
 
 export type SettingsTab =
   | "general"
+  | "appearance"
+  | "keybinds"
   | "github"
   | "claude"
   | "latex"
-  | "about"
   | "uninstall";
 
 interface UI {
@@ -63,6 +71,7 @@ interface UI {
 interface AppState {
   info: AppInfo | null;
   settings: Settings | null;
+  customThemes: Theme[];
   projects: ProjectSummary[];
   sync: Record<string, SyncStatus>;
   current: string | null;
@@ -74,6 +83,8 @@ interface AppState {
   refreshProjects: () => Promise<void>;
   refreshInfo: () => Promise<void>;
   saveSettings: (patch: Partial<Settings>) => Promise<void>;
+  saveCustomTheme: (theme: Theme) => void;
+  deleteCustomTheme: (id: string) => Promise<void>;
   openProject: (name: string | null) => void;
   setUi: (patch: Partial<UI>) => void;
   toggle: (key: "sidebar" | "pdf" | "chat" | "logs" | "palette") => void;
@@ -108,6 +119,7 @@ let toastId = 0;
 export const useApp = create<AppState>((set, get) => ({
   info: null,
   settings: null,
+  customThemes: loadCustomThemes(),
   projects: [],
   sync: {},
   current: null,
@@ -122,7 +134,8 @@ export const useApp = create<AppState>((set, get) => ({
     ]);
     set({ info, settings });
     document.documentElement.classList.add(`platform-${info.platform}`);
-    applyTheme(settings.theme);
+    applyTheme(settings.theme, get().customThemes);
+    applyFontSize(settings.editorFontSize);
     void api
       .githubStatus()
       .then(async ({ user }) => {
@@ -156,7 +169,8 @@ export const useApp = create<AppState>((set, get) => ({
     try {
       const next = await api.saveSettings({ ...cur, ...patch });
       set({ settings: next });
-      if (patch.theme) applyTheme(next.theme);
+      if (patch.theme) applyTheme(next.theme, get().customThemes);
+      if (patch.editorFontSize) applyFontSize(next.editorFontSize);
       if (patch.projectsRoot) {
         await get().refreshInfo();
         await get().refreshProjects();
@@ -165,6 +179,22 @@ export const useApp = create<AppState>((set, get) => ({
     } catch (e) {
       get().fail(e);
     }
+  },
+
+  saveCustomTheme(theme) {
+    const rest = get().customThemes.filter((t) => t.id !== theme.id);
+    const customThemes = [...rest, { ...theme, custom: true }];
+    persistCustomThemes(customThemes);
+    set({ customThemes });
+    if (get().settings?.theme === theme.id) applyTheme(theme.id, customThemes);
+  },
+
+  async deleteCustomTheme(id) {
+    const customThemes = get().customThemes.filter((t) => t.id !== id);
+    persistCustomThemes(customThemes);
+    set({ customThemes });
+    if (get().settings?.theme === id)
+      await get().saveSettings({ theme: "system" });
   },
 
   openProject(name) {
@@ -177,7 +207,14 @@ export const useApp = create<AppState>((set, get) => ({
 
   setUi(patch) {
     const ui = { ...get().ui, ...patch };
-    set({ ui });
+    if (patch.palette) ui.settings = null;
+    else if (patch.settings) ui.palette = false;
+    set({
+      ui,
+      ...((patch.palette || patch.settings) && get().dialog
+        ? { dialog: null }
+        : {}),
+    });
     try {
       const { palette: _p, settings: _s, ...persist } = ui;
       localStorage.setItem(UI_KEY, JSON.stringify(persist));
@@ -189,6 +226,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   openDialog(dialog) {
+    if (dialog) get().setUi({ palette: false, settings: null });
     set({ dialog });
   },
 
@@ -209,9 +247,3 @@ export const useApp = create<AppState>((set, get) => ({
     set({ sync: { ...get().sync, [s.project]: s } });
   },
 }));
-
-export function applyTheme(theme: Settings["theme"]) {
-  const root = document.documentElement;
-  if (theme === "system") root.removeAttribute("data-theme");
-  else root.setAttribute("data-theme", theme);
-}
