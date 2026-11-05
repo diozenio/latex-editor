@@ -23,6 +23,7 @@ import {
   useState,
 } from "react";
 import { basename, dirname, join } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 import { api, type FileNode } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
@@ -55,6 +56,7 @@ const GIT_MARK: Record<string, [string, string]> = {
 };
 
 export function FileTree() {
+  const t = useT();
   const { project, tree, active, git, openFile } = useProject();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState<Editing>(null);
@@ -253,9 +255,9 @@ export function FileTree() {
   const confirmDelete = (node: FileNode) =>
     app.openDialog({
       kind: "confirm",
-      title: `Delete “${node.name}”?`,
-      message: "It will be moved to your system Trash.",
-      confirm: "Move to Trash",
+      title: t("tree.deleteTitle", { name: node.name }),
+      message: t("tree.deleteMessage"),
+      confirm: t("common.moveToTrash"),
       danger: true,
       onConfirm: () =>
         run(async () => {
@@ -271,12 +273,12 @@ export function FileTree() {
     const dir = node ? (node.isDir ? node.path : dirname(node.path)) : "";
     const items: MenuEntry[] = [
       {
-        label: "New file",
+        label: t("common.newFile"),
         icon: <FilePlus2 size={14} />,
         onSelect: () => startCreate("new-file", dir),
       },
       {
-        label: "New folder",
+        label: t("common.newFolder"),
         icon: <FolderPlus size={14} />,
         onSelect: () => startCreate("new-folder", dir),
       },
@@ -289,7 +291,7 @@ export function FileTree() {
       project.meta.mainFile !== node.path
     ) {
       items.push({
-        label: "Set as main file",
+        label: t("tree.setMain"),
         icon: <Star size={14} />,
         onSelect: async () => {
           await api.setProjectMeta(name, {
@@ -303,24 +305,24 @@ export function FileTree() {
     }
     items.push(
       {
-        label: "Rename",
+        label: t("common.rename"),
         icon: <Pencil size={14} />,
         onSelect: () => setEditing({ mode: "rename", path: node.path }),
       },
       {
-        label: "Copy path",
+        label: t("tree.copyPath"),
         icon: <Copy size={14} />,
         onSelect: () => navigator.clipboard.writeText(node.path),
       },
       {
-        label: "Show in Finder",
+        label: t("common.showInFinder"),
         icon: <FolderOpen size={14} />,
         onSelect: async () =>
           revealItemInDir(await api.projectPath(name, node.path)),
       },
       { separator: true },
       {
-        label: "Move to Trash",
+        label: t("common.moveToTrash"),
         icon: <Trash2 size={14} />,
         danger: true,
         onSelect: () => confirmDelete(node),
@@ -398,7 +400,7 @@ export function FileTree() {
                 <span className="name">{n.name}</span>
               )}
               {project.meta.mainFile === n.path && (
-                <span className="main-badge">MAIN</span>
+                <span className="main-badge">{t("tree.main")}</span>
               )}
               {mark && (
                 <span
