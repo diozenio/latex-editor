@@ -135,9 +135,6 @@ button {
   padding: 0 var(--s-3) 0 var(--s-4);
   border-bottom: 1px solid var(--border);
 }
-.topbar.no-border {
-  border-bottom-color: transparent;
-}
 .topbar .spacer {
   flex: 1;
   align-self: stretch;

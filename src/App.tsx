@@ -255,7 +255,7 @@ export default function App() {
         <Workspace />
       ) : (
         <main className="main">
-          <header className="topbar drag no-border" data-tauri-drag-region>
+          <header className="topbar drag" data-tauri-drag-region>
             <button
               className="icon-btn"
               title={sidebarHint}
