@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { Loader2, PanelLeftOpen } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -12,8 +12,15 @@ import { SettingsDialog } from "@/components/Settings";
 import { Sidebar } from "@/components/Sidebar";
 import { Toasts } from "@/components/ui/Toasts";
 import { exportZipFlow, Workspace } from "@/components/Workspace";
-import { mod } from "@/lib/format";
+import { t as translate, useLanguage, useT } from "@/lib/i18n";
 import { api, type SyncStatus } from "@/lib/ipc";
+import {
+  installGlobalKeybinds,
+  syncMenu,
+  useKeybinds,
+  useShortcut,
+} from "@/lib/keybinds";
+import { clampFontSize, FONT_BASE } from "@/lib/themes";
 import { useApp } from "@/stores/app";
 import { projectExists, useProject } from "@/stores/project";
 import { useUpdater } from "@/stores/updater";
@@ -23,6 +30,8 @@ function runAction(id: string) {
   const proj = useProject.getState();
   switch (id) {
     case "settings":
+      return app.setUi({ settings: "general" });
+    case "storage":
       return app.setUi({ settings: "general" });
     case "uninstall":
       return app.openDialog({ kind: "uninstall" });
@@ -59,6 +68,18 @@ function runAction(id: string) {
       });
     case "compile":
       return proj.project && proj.compile();
+    case "zoom-in":
+    case "zoom-out":
+    case "zoom-reset": {
+      const settings = app.settings;
+      if (!settings) return;
+      const cur = clampFontSize(settings.editorFontSize);
+      const next =
+        id === "zoom-reset"
+          ? FONT_BASE
+          : clampFontSize(cur + (id === "zoom-in" ? 1 : -1));
+      if (next !== cur) return void app.saveSettings({ editorFontSize: next });
+    }
   }
 }
 
@@ -86,30 +107,19 @@ function rootChanged(project: string) {
     if (added && (await projectExists(added)))
       return void useProject.getState().followRename(gone, added);
     if (gone !== useApp.getState().current) return;
-    useApp
-      .getState()
-      .toast(`“${gone}” was moved or deleted outside QuillTex.`, "error");
+    useApp.getState().toast(translate("app.rootGone", { name: gone }), "error");
     useApp.getState().openProject(null);
   }, 600);
 }
 
-const SHORTCUTS: Record<string, string> = {
-  k: "command-palette",
-  b: "toggle-sidebar",
-  j: "toggle-chat",
-  ",": "settings",
-  Enter: "compile",
-  "shift+P": "toggle-pdf",
-  "shift+G": "toggle-git",
-  "shift+N": "new-project",
-  "shift+O": "import-zip",
-  "shift+S": "download-pdf",
-  n: "new-file",
-};
-
 export default function App() {
+  const t = useT();
   const [ready, setReady] = useState(false);
-  const { current, ui, info, toggle } = useApp();
+  const { current, ui, toggle } = useApp();
+  const sidebarKey = useShortcut("toggle-sidebar");
+  const sidebarHint = sidebarKey
+    ? `${t("common.toggleSidebar")} (${sidebarKey})`
+    : t("common.toggleSidebar");
   const [dropping, setDropping] = useState(false);
   const refreshTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -164,7 +174,10 @@ export default function App() {
           if (!proj) {
             for (const z of p.paths.filter((x) => /\.zip$/i.test(x))) {
               const created = await api.importZip(z);
-              app.toast(`Imported “${created.name}”`, "success");
+              app.toast(
+                translate("toast.imported", { name: created.name }),
+                "success",
+              );
             }
             await app.refreshProjects();
             return;
@@ -178,7 +191,7 @@ export default function App() {
           const added = await api.importFiles(proj.name, p.paths, dir);
           await useProject.getState().refreshTree();
           app.toast(
-            `Added ${added.length} file${added.length === 1 ? "" : "s"}`,
+            translate("app.filesAdded", { count: added.length }),
             "success",
           );
         } catch (e) {
@@ -208,22 +221,21 @@ export default function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
+  useEffect(() => installGlobalKeybinds(runAction), []);
+
   useEffect(() => {
-    if (!info || info.platform === "macos") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const key =
-        (e.shiftKey ? "shift+" : "") +
-        (e.key.length === 1 && e.shiftKey ? e.key.toUpperCase() : e.key);
-      const action = SHORTCUTS[key];
-      if (action) {
-        e.preventDefault();
-        void runAction(action);
-      }
+    syncMenu();
+    const offKeys = useKeybinds.subscribe((s, prev) => {
+      if (s.overrides !== prev.overrides) syncMenu();
+    });
+    const offLang = useLanguage.subscribe((s, prev) => {
+      if (s.language !== prev.language) syncMenu();
+    });
+    return () => {
+      offKeys();
+      offLang();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [info]);
+  }, []);
 
   if (!ready) {
     return (
@@ -244,21 +256,23 @@ export default function App() {
       ) : (
         <main className="main">
           <header className="topbar drag no-border" data-tauri-drag-region>
-            {!ui.sidebar && (
-              <button
-                className="icon-btn"
-                title={`Show sidebar (${mod}B)`}
-                onClick={() => toggle("sidebar")}
-              >
+            <button
+              className="icon-btn"
+              title={sidebarHint}
+              onClick={() => toggle("sidebar")}
+            >
+              {ui.sidebar ? (
+                <PanelLeftClose size={16} />
+              ) : (
                 <PanelLeftOpen size={16} />
-              </button>
-            )}
+              )}
+            </button>
             <div className="spacer" data-tauri-drag-region />
             <button
               className={`ai-btn${ui.chat ? " active" : ""}`}
               onClick={() => toggle("chat")}
             >
-              ✦ AI assistant
+              ✦ {t("common.aiAssistant")}
             </button>
           </header>
           <div className="panes">
@@ -269,9 +283,7 @@ export default function App() {
       )}
       {dropping && (
         <div className="drop-overlay">
-          {current
-            ? "Drop files to add them to the project"
-            : "Drop a .zip to import it as a project"}
+          {current ? t("app.dropFiles") : t("app.dropZip")}
         </div>
       )}
       <Dialogs />
