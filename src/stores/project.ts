@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
+import { t } from "@/lib/i18n";
 import {
   api,
   type CompileResult,
@@ -394,12 +395,7 @@ export const useProject = create<ProjectState>((set, get) => ({
         });
         texChanged ||= /\.(tex|bib)$/i.test(path);
       } else {
-        useApp
-          .getState()
-          .toast(
-            `${path} changed on disk while you had unsaved edits. Your version is kept.`,
-            "error",
-          );
+        useApp.getState().toast(t("project.changedOnDisk", { path }), "error");
       }
     }
     if (
