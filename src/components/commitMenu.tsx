@@ -1,4 +1,5 @@
 import { Copy, Eye, History, RotateCcw, Scissors, Undo2 } from "lucide-react";
+import { t } from "@/lib/i18n";
 import type { Commit } from "@/lib/ipc";
 import { api } from "@/lib/ipc";
 import { useApp } from "@/stores/app";
@@ -47,7 +48,7 @@ export function commitMenu(
   const items: MenuEntry[] = [];
   if (open) {
     items.push({
-      label: "View changes",
+      label: t("git.viewChanges"),
       icon: <Eye size={14} />,
       onSelect: () =>
         useApp.getState().openDialog({ kind: "commit", project, commit: c }),
@@ -56,72 +57,72 @@ export function commitMenu(
   }
   items.push(
     {
-      label: "Restore this version",
+      label: t("git.restore"),
       icon: <History size={14} />,
       disabled: isHead,
       onSelect: () =>
         confirm(
-          "Restore this version?",
-          `The files will go back to how they were at ${quoted}. This is saved as a new commit, so nothing is lost from the history.`,
-          "Restore",
+          t("git.restoreTitle"),
+          t("git.restoreMessage", { commit: quoted }),
+          t("git.restoreConfirm"),
           false,
           () =>
             run(
               () => api.gitRestoreVersion(project, c.id),
-              `Restored ${c.short}`,
+              t("git.restored", { short: c.short }),
             ),
         ),
     },
     {
-      label: "Undo this commit",
+      label: t("git.undo"),
       icon: <Undo2 size={14} />,
       onSelect: () =>
         confirm(
-          "Undo this commit?",
-          `A new commit will reverse only the changes made in ${quoted}. Later work is kept.`,
-          "Undo",
+          t("git.undoTitle"),
+          t("git.undoMessage", { commit: quoted }),
+          t("git.undoConfirm"),
           false,
           () =>
-            run(() => api.gitRevertCommit(project, c.id), `Undid ${c.short}`),
+            run(() => api.gitRevertCommit(project, c.id), t("git.undid", { short: c.short })),
         ),
     },
     {
-      label: "Reset branch to here",
+      label: t("git.reset"),
       icon: <RotateCcw size={14} />,
       danger: true,
       disabled: isHead,
       onSelect: () =>
         confirm(
-          "Reset the branch to this commit?",
-          `Every commit after ${quoted} will be removed from the branch, along with its changes. This cannot be undone.`,
-          "Reset",
+          t("git.resetTitle"),
+          t("git.resetMessage", { commit: quoted }),
+          t("git.resetConfirm"),
           true,
-          () => run(() => api.gitResetTo(project, c.id), `Reset to ${c.short}`),
+          () => run(() => api.gitResetTo(project, c.id), t("git.resetDone", { short: c.short })),
         ),
     },
     {
-      label: "Delete commit",
+      label: t("git.deleteCommit"),
       icon: <Scissors size={14} />,
       danger: true,
       onSelect: () =>
         confirm(
-          "Delete this commit?",
-          `${quoted} will be removed from the history and its changes will be gone. Later commits are kept.${
-            c.pushed ? " It was already pushed, so this will be refused." : ""
+          t("git.deleteCommitTitle"),
+          `${t("git.deleteCommitMessage", { commit: quoted })}${
+            c.pushed ? t("git.deleteCommitPushed") : ""
           }`,
-          "Delete",
+          t("common.delete"),
           true,
           () =>
-            run(() => api.gitDeleteCommit(project, c.id), `Deleted ${c.short}`),
+            run(() => api.gitDeleteCommit(project, c.id), t("git.deleted", { short: c.short })),
         ),
     },
     { separator: true },
     {
-      label: "Copy commit id",
+      label: t("git.copyId"),
       icon: <Copy size={14} />,
       onSelect: () => {
         void navigator.clipboard.writeText(c.id);
-        useApp.getState().toast("Commit id copied");
+        useApp.getState().toast(t("git.idCopied"));
       },
     },
   );
