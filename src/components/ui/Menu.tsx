@@ -36,7 +36,7 @@ function entries<T extends typeof DM | typeof CM>(M: T, items: MenuEntry[]) {
         onSelect={() => it.onSelect?.()}
       >
         {it.icon}
-        <span>{it.label}</span>
+        <span className="menu-text">{it.label}</span>
         {it.right && <span className="right">{it.right}</span>}
         {it.action && (
           <button
