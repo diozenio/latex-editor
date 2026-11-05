@@ -31,6 +31,34 @@ export interface UsageWindow {
   estimatedLimit: number | null;
 }
 
+export interface StorageUsage {
+  projects: number;
+  engine: number;
+  system: number;
+  total: number;
+}
+
+export interface EngineEntry {
+  id: "tectonic" | "tectonic-cache" | "texlive" | "bundled";
+  name: string;
+  detail: string;
+  path: string | null;
+  size: number;
+  installed: boolean;
+}
+
+export interface TexPackage {
+  name: string;
+  revision: number;
+  description: string;
+  size: number;
+}
+
+export interface Installed {
+  engines: EngineEntry[];
+  packages: TexPackage[];
+}
+
 export interface FileNode {
   name: string;
   path: string;
@@ -120,7 +148,7 @@ export interface Settings {
   mcpRegistered: boolean;
   claudePath: string;
   editorFontSize: number;
-  theme: "system" | "light" | "dark";
+  theme: string;
   chatModel: string;
 }
 
@@ -171,6 +199,10 @@ export interface SyncStatus {
 }
 
 export const api = {
+  setMenuAccelerators: (
+    accels: Record<string, string>,
+    labels: Record<string, string>,
+  ) => invoke<void>("set_menu_accelerators", { accels, labels }),
   appInfo: () => invoke<AppInfo>("app_info"),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) =>
@@ -298,6 +330,11 @@ export const api = {
   chatCancel: (chatId: string) => invoke<void>("chat_cancel", { chatId }),
   claudeUsage: (refresh: boolean) =>
     invoke<UsageWindow[]>("claude_usage", { refresh }),
+  storageUsage: () => invoke<StorageUsage>("storage_usage"),
+  installedComponents: () => invoke<Installed>("installed_components"),
+  clearTectonicCache: () => invoke<void>("clear_tectonic_cache"),
+  removeTexPackage: (name: string) =>
+    invoke<void>("remove_tex_package", { name }),
   chatLoad: <T>(key: string) => invoke<T | null>("chat_load", { key }),
   chatSave: (key: string, data: unknown) =>
     invoke<void>("chat_save", { key, data }),
