@@ -1,6 +1,7 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, CircleDot, CloudOff, Loader2, Cloud } from "lucide-react";
-import type { RepoStatus } from "@/lib/ipc";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, CircleDot, Cloud, CloudOff, Loader2 } from "lucide-react";
 import { timeAgo } from "@/lib/format";
+import { useT } from "@/lib/i18n";
+import type { RepoStatus } from "@/lib/ipc";
 
 export type SyncState = "none" | "local" | "synced" | "ahead" | "behind" | "diverged" | "error" | "checking";
 
@@ -29,26 +30,27 @@ export function SyncBadge({
   compact?: boolean;
   onClick?: () => void;
 }) {
+  const t = useT();
   const state = busy ? "checking" : syncState(status, error);
   if (state === "none") return null;
   const dirty = status?.files.length ?? 0;
   const map: Record<SyncState, { cls: string; icon: JSX.Element; label: string; title: string }> = {
     none: { cls: "", icon: <></>, label: "", title: "" },
-    checking: { cls: "muted", icon: <Loader2 size={12} className="spin" />, label: "Syncing", title: "Talking to origin…" },
-    local: { cls: "muted", icon: <Cloud size={12} />, label: "Local only", title: "No remote. Publish to GitHub to sync." },
-    synced: { cls: "green", icon: <Check size={12} />, label: "Synced", title: "Up to date with origin" },
-    ahead: { cls: "blue", icon: <ArrowUp size={12} />, label: `${status?.ahead} to push`, title: `${status?.ahead} commit(s) not on origin yet` },
-    behind: { cls: "orange", icon: <ArrowDown size={12} />, label: `${status?.behind} to pull`, title: `origin has ${status?.behind} new commit(s)` },
+    checking: { cls: "muted", icon: <Loader2 size={12} className="spin" />, label: t("sync.syncing"), title: t("sync.syncingTitle") },
+    local: { cls: "muted", icon: <Cloud size={12} />, label: t("sync.local"), title: t("sync.localTitle") },
+    synced: { cls: "green", icon: <Check size={12} />, label: t("sync.synced"), title: t("sync.syncedTitle") },
+    ahead: { cls: "blue", icon: <ArrowUp size={12} />, label: t("sync.ahead", { count: status?.ahead ?? 0 }), title: t("sync.aheadTitle", { count: status?.ahead ?? 0 }) },
+    behind: { cls: "orange", icon: <ArrowDown size={12} />, label: t("sync.behind", { count: status?.behind ?? 0 }), title: t("sync.behindTitle", { count: status?.behind ?? 0 }) },
     diverged: {
       cls: "red",
       icon: <ArrowUpDown size={12} />,
       label: `↑${status?.ahead} ↓${status?.behind}`,
-      title: "Your branch and origin have diverged. Pull to merge.",
+      title: t("sync.divergedTitle"),
     },
-    error: { cls: "red", icon: <CloudOff size={12} />, label: "Offline", title: error ?? "" },
+    error: { cls: "red", icon: <CloudOff size={12} />, label: t("sync.offline"), title: error ?? "" },
   };
   const m = map[state];
-  const title = `${m.title}${dirty ? ` · ${dirty} uncommitted change(s)` : ""}${checkedAt ? ` · checked ${timeAgo(checkedAt)}` : ""}`;
+  const title = `${m.title}${dirty ? ` · ${t("sync.uncommitted", { count: dirty })}` : ""}${checkedAt ? ` · ${t("sync.checked", { time: timeAgo(checkedAt) })}` : ""}`;
   const content = (
     <>
       {m.icon}
