@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { slug, timeAgo } from "@/lib/format";
+import { hasKey, type MessageKey, useT } from "@/lib/i18n";
+import { T } from "@/lib/i18n/T";
 import {
   api,
   type Branch,
@@ -31,6 +33,7 @@ import { commitMenu } from "./commitMenu";
 import { describeMerge } from "./GitPanel";
 import { Dialog } from "./ui/Dialog";
 import { Dropdown } from "./ui/Menu";
+import { Select } from "./ui/Select";
 
 export function Dialogs() {
   const dialog = useApp((s) => s.dialog);
@@ -94,11 +97,27 @@ const TEMPLATE_ICONS: Record<string, JSX.Element> = {
   cv: <UserSquare size={18} />,
 };
 
+const DEFAULT_TEMPLATES: [string, string][] = [
+  ["blank", "Blank"],
+  ["article", "Article"],
+  ["report", "Report"],
+  ["beamer", "Presentation (Beamer)"],
+  ["letter", "Letter"],
+  ["cv", "CV"],
+];
+
+function templateKey(id: string): MessageKey | null {
+  const key = `template.${id}`;
+  return hasKey(key) ? (key as MessageKey) : null;
+}
+
 function NewProject({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const app = useApp();
   const [name, setName] = useState("");
   const [template, setTemplate] = useState("article");
-  const [templates, setTemplates] = useState<[string, string][]>([]);
+  const [templates, setTemplates] =
+    useState<[string, string][]>(DEFAULT_TEMPLATES);
   const { busy, error, run } = useBusy();
 
   useEffect(() => {
@@ -118,25 +137,26 @@ function NewProject({ onClose }: { onClose: () => void }) {
     <Dialog
       open
       onClose={onClose}
-      title="New project"
-      description="A new folder is created in your projects directory."
+      title={t("common.newProject")}
+      description={t("dialog.newProject.desc")}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             className="btn primary"
             disabled={!name.trim() || busy}
             onClick={submit}
           >
-            {busy && <Loader2 size={14} className="spin" />} Create
+            {busy && <Loader2 size={14} className="spin" />}{" "}
+            {t("common.create")}
           </button>
         </>
       }
     >
       <div className="field">
-        <label>Name</label>
+        <label>{t("dialog.newProject.name")}</label>
         <input
           spellCheck={false}
           autoCorrect="off"
@@ -151,7 +171,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
         />
       </div>
       <div className="field">
-        <label>Template</label>
+        <label>{t("dialog.newProject.template")}</label>
         <div className="template-grid">
           {templates.map(([id, label]) => (
             <button
@@ -160,7 +180,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
               onClick={() => setTemplate(id)}
             >
               {TEMPLATE_ICONS[id] ?? <ScrollText size={18} />}
-              {label}
+              {templateKey(id) ? t(templateKey(id)!) : label}
             </button>
           ))}
         </div>
@@ -171,6 +191,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
 }
 
 function CloneRepo({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const app = useApp();
   const [repos, setRepos] = useState<Repo[] | null>(null);
   const [query, setQuery] = useState("");
@@ -222,23 +243,24 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
       open
       wide
       onClose={onClose}
-      title="Clone from GitHub"
+      title={t("common.cloneFromGithub")}
       description={
         app.info?.githubConnected
-          ? "Pick one of your repositories or paste a URL."
-          : "Paste a repository URL. Sign in to GitHub in Settings to browse your repositories."
+          ? t("dialog.clone.descConnected")
+          : t("dialog.clone.descSignedOut")
       }
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             className="btn primary"
             disabled={!url || busy}
             onClick={submit}
           >
-            {busy && <Loader2 size={14} className="spin" />} Clone
+            {busy && <Loader2 size={14} className="spin" />}{" "}
+            {t("dialog.clone.button")}
           </button>
         </>
       }
@@ -253,7 +275,7 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
               autoCapitalize="off"
               autoComplete="off"
               autoFocus
-              placeholder="Search repositories"
+              placeholder={t("dialog.clone.search")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -298,7 +320,7 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
       )}
       <div className="row" style={{ alignItems: "flex-end" }}>
         <div className="field grow">
-          <label>Repository URL</label>
+          <label>{t("dialog.clone.url")}</label>
           <input
             spellCheck={false}
             autoCorrect="off"
@@ -311,7 +333,7 @@ function CloneRepo({ onClose }: { onClose: () => void }) {
           />
         </div>
         <div className="field" style={{ width: 200 }}>
-          <label>Project name</label>
+          <label>{t("dialog.clone.name")}</label>
           <input
             spellCheck={false}
             autoCorrect="off"
@@ -335,6 +357,7 @@ function Publish({
   project: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const app = useApp();
   const [name, setName] = useState(slug(project));
   const [isPrivate, setPrivate] = useState(true);
@@ -345,12 +368,12 @@ function Publish({
       <Dialog
         open
         onClose={onClose}
-        title="Connect GitHub first"
-        description="Publishing creates a repository on your account and pushes this project to it."
+        title={t("dialog.publish.connectTitle")}
+        description={t("dialog.publish.connectDesc")}
         footer={
           <>
             <button className="btn" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               className="btn primary"
@@ -359,7 +382,7 @@ function Publish({
                 app.setUi({ settings: "github" });
               }}
             >
-              <Github size={14} /> Connect GitHub
+              <Github size={14} /> {t("dialog.publish.connect")}
             </button>
           </>
         }
@@ -375,13 +398,16 @@ function Publish({
       if (!status.isRepo) {
         await api.gitInit(project);
         await api.gitStageAll(project);
-        await api.gitCommit(project, "Initial commit");
+        await api.gitCommit(project, t("git.initialCommit"));
       } else if (status.files.length) {
         await api.gitStageAll(project);
-        await api.gitCommit(project, "Update before publishing");
+        await api.gitCommit(project, t("git.updateBeforePublish"));
       }
       const url = await api.githubPublish(project, name, isPrivate);
-      app.toast(`Published to ${url.replace(/\.git$/, "")}`, "success");
+      app.toast(
+        t("dialog.publish.done", { url: url.replace(/\.git$/, "") }),
+        "success",
+      );
       await useProject.getState().refreshGit();
       onClose();
     });
@@ -390,12 +416,15 @@ function Publish({
     <Dialog
       open
       onClose={onClose}
-      title="Publish to GitHub"
-      description={`Creates a new repository under @${app.settings?.githubUser?.login} and pushes “${project}”.`}
+      title={t("common.publishToGithub")}
+      description={t("dialog.publish.desc", {
+        user: app.settings?.githubUser?.login ?? "",
+        project,
+      })}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             className="btn primary"
@@ -407,13 +436,13 @@ function Publish({
             ) : (
               <Github size={14} />
             )}{" "}
-            Publish
+            {t("dialog.publish.button")}
           </button>
         </>
       }
     >
       <div className="field">
-        <label>Repository name</label>
+        <label>{t("dialog.publish.repoName")}</label>
         <input
           spellCheck={false}
           autoCorrect="off"
@@ -432,9 +461,9 @@ function Publish({
           onChange={(e) => setPrivate(e.target.checked)}
         />
         <span>
-          Private repository
+          {t("dialog.publish.private")}
           <div className="muted" style={{ fontSize: 12 }}>
-            Only you and people you invite can see it.
+            {t("dialog.publish.privateHint")}
           </div>
         </span>
       </label>
@@ -444,6 +473,7 @@ function Publish({
 }
 
 function Merge({ project, onClose }: { project: string; onClose: () => void }) {
+  const t = useT();
   const app = useApp();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [from, setFrom] = useState("");
@@ -477,12 +507,14 @@ function Merge({ project, onClose }: { project: string; onClose: () => void }) {
     <Dialog
       open
       onClose={onClose}
-      title="Merge branch"
-      description={`Bring the changes from another branch into ${head ?? "the current branch"}.`}
+      title={t("dialog.merge.title")}
+      description={t("dialog.merge.desc", {
+        branch: head ?? t("dialog.merge.currentBranch"),
+      })}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             className="btn primary"
@@ -494,26 +526,20 @@ function Merge({ project, onClose }: { project: string; onClose: () => void }) {
             ) : (
               <GitMerge size={14} />
             )}{" "}
-            Merge
+            {t("dialog.merge.button")}
           </button>
         </>
       }
     >
       <div className="field">
-        <label>Merge from</label>
-        <select
-          className="select"
+        <label>{t("dialog.merge.from")}</label>
+        <Select
           value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        >
-          {branches
+          options={branches
             .filter((b) => !b.isHead)
-            .map((b) => (
-              <option key={b.name} value={b.name}>
-                {b.name}
-              </option>
-            ))}
-        </select>
+            .map((b) => ({ value: b.name, label: b.name }))}
+          onChange={setFrom}
+        />
       </div>
       {error && <div className="banner red">{error}</div>}
     </Dialog>
@@ -529,6 +555,7 @@ function Diff({
   path: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const [diff, setDiff] = useState<string | null>(null);
   useEffect(() => {
     api
@@ -542,7 +569,7 @@ function Diff({
       wide
       onClose={onClose}
       title={path}
-      description="Changes since the last commit"
+      description={t("dialog.diff.desc")}
       footer={
         <>
           <button
@@ -552,10 +579,10 @@ function Diff({
               void useProject.getState().openFile(path);
             }}
           >
-            Open file
+            {t("dialog.diff.openFile")}
           </button>
           <button className="btn primary" onClick={onClose}>
-            Done
+            {t("common.done")}
           </button>
         </>
       }
@@ -566,12 +593,13 @@ function Diff({
 }
 
 function DiffLines({ diff }: { diff: string | null }) {
+  const t = useT();
   return (
     <div className="diff">
       {diff === null ? (
-        <div className="muted">Loading…</div>
+        <div className="muted">{t("common.loading")}</div>
       ) : !diff.trim() ? (
-        <div className="muted">No textual changes.</div>
+        <div className="muted">{t("dialog.diff.noChanges")}</div>
       ) : (
         diff.split("\n").map((l, i) => (
           <div
@@ -603,6 +631,7 @@ function CommitDetails({
   commit: Commit;
   onClose: () => void;
 }) {
+  const t = useT();
   const [files, setFiles] = useState<CommitFile[] | null>(null);
   const [path, setPath] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
@@ -644,7 +673,7 @@ function CommitDetails({
           align="end"
           items={commitMenu(project, commit, head, false)}
           trigger={
-            <button className="icon-btn" title="Actions">
+            <button className="icon-btn" title={t("common.actions")}>
               <MoreHorizontal size={16} />
             </button>
           }
@@ -652,7 +681,7 @@ function CommitDetails({
       }
     >
       {files === null ? (
-        <div className="muted">Loading…</div>
+        <div className="muted">{t("common.loading")}</div>
       ) : (
         <>
           <div className="commit-files">
@@ -675,7 +704,9 @@ function CommitDetails({
                 </span>
               </div>
             ))}
-            {!files.length && <div className="muted">No file changes.</div>}
+            {!files.length && (
+              <div className="muted">{t("dialog.commit.noFiles")}</div>
+            )}
           </div>
           {path && (
             <div className="commit-diff">
@@ -688,8 +719,8 @@ function CommitDetails({
   );
 }
 
-const ENGINES: [Engine, string][] = [
-  ["tectonic", "Tectonic (built-in, XeTeX)"],
+const ENGINES: [Engine, MessageKey | string][] = [
+  ["tectonic", "engine.tectonic"],
   ["latexmk-pdflatex", "pdfLaTeX (TeX Live)"],
   ["latexmk-xelatex", "XeLaTeX (TeX Live)"],
   ["latexmk-lualatex", "LuaLaTeX (TeX Live)"],
@@ -706,6 +737,7 @@ const COLORS = [
 ];
 
 function ProjectSettings({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const project = useProject((s) => s.project);
   const tree = useProject((s) => s.tree);
   const info = useApp((s) => s.info);
@@ -731,61 +763,52 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
     <Dialog
       open
       onClose={onClose}
-      title="Project settings"
+      title={t("dialog.projectSettings.title")}
       description={
-        <>
-          Saved in <span className="mono">.quilltex/project.json</span> inside
-          the project.
-        </>
+        <T
+          k="dialog.projectSettings.desc"
+          values={{
+            file: <span className="mono">.quilltex/project.json</span>,
+          }}
+        />
       }
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button className="btn primary" disabled={busy} onClick={submit}>
-            Save
+            {t("common.save")}
           </button>
         </>
       }
     >
       <div className="field">
-        <label>Main document</label>
-        <select
-          className="select"
+        <label>{t("dialog.projectSettings.main")}</label>
+        <Select
           value={meta.mainFile}
-          onChange={(e) => setMeta({ ...meta, mainFile: e.target.value })}
-        >
-          {texFiles.map((f) => (
-            <option key={f}>{f}</option>
-          ))}
-        </select>
+          options={texFiles.map((f) => ({ value: f, label: f }))}
+          onChange={(v) => setMeta({ ...meta, mainFile: v })}
+        />
       </div>
       <div className="field">
-        <label>Compiler</label>
-        <select
-          className="select"
+        <label>{t("dialog.projectSettings.compiler")}</label>
+        <Select
           value={meta.engine}
-          onChange={(e) =>
-            setMeta({ ...meta, engine: e.target.value as Engine })
-          }
-        >
-          {ENGINES.map(([id, label]) => (
-            <option key={id} value={id}>
-              {label}
-              {id !== "tectonic" && !info?.texlive && !info?.texliveBundled
-                ? " (downloads on first compile)"
-                : ""}
-            </option>
-          ))}
-        </select>
-        <span className="hint">
-          Both belong to QuillTex and download packages on demand. TeX Live
-          covers newer packages, biber, glossaries and LuaLaTeX.
-        </span>
+          options={ENGINES.map(([id, label]) => ({
+            value: id,
+            label: `${hasKey(label) ? t(label as MessageKey) : label}${
+              id !== "tectonic" && !info?.texlive && !info?.texliveBundled
+                ? t("dialog.projectSettings.downloadsOnFirst")
+                : ""
+            }`,
+          }))}
+          onChange={(v) => setMeta({ ...meta, engine: v as Engine })}
+        />
+        <span className="hint">{t("dialog.projectSettings.compilerHint")}</span>
       </div>
       <div className="field">
-        <label>Color</label>
+        <label>{t("dialog.projectSettings.color")}</label>
         <div className="row">
           {COLORS.map((c) => (
             <button
@@ -808,8 +831,8 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
       </div>
       <div className="setting-row">
         <div className="text">
-          <strong>Compile automatically</strong>
-          <span>Recompile on ⌘S and when files change outside the editor</span>
+          <strong>{t("dialog.projectSettings.auto")}</strong>
+          <span>{t("dialog.projectSettings.autoHint")}</span>
         </div>
         <button
           className={`switch${meta.autoCompile ? " on" : ""}`}
@@ -822,6 +845,7 @@ function ProjectSettings({ onClose }: { onClose: () => void }) {
 }
 
 function Uninstall({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const info = useApp((s) => s.info);
   const [deleteProjects, setDeleteProjects] = useState(false);
   const [confirmText, setConfirmText] = useState("");
@@ -837,24 +861,25 @@ function Uninstall({ onClose }: { onClose: () => void }) {
     <Dialog
       open
       onClose={onClose}
-      title="Uninstall QuillTex"
-      description="Removes the app, its settings, the TeX package cache, chat history, the saved GitHub token and the Claude Code registration."
+      title={t("dialog.uninstall.title")}
+      description={t("dialog.uninstall.desc")}
       footer={
         done ? (
           <button className="btn primary" onClick={onClose}>
-            OK
+            {t("common.ok")}
           </button>
         ) : (
           <>
             <button className="btn" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               className="btn danger solid"
               disabled={busy || (deleteProjects && confirmText !== "delete")}
               onClick={submit}
             >
-              {busy && <Loader2 size={14} className="spin" />} Uninstall
+              {busy && <Loader2 size={14} className="spin" />}{" "}
+              {t("dialog.uninstall.button")}
             </button>
           </>
         )
@@ -867,10 +892,9 @@ function Uninstall({ onClose }: { onClose: () => void }) {
           <label className="checkbox">
             <input type="checkbox" checked readOnly disabled />
             <span>
-              App and app data
+              {t("dialog.uninstall.appData")}
               <div className="muted" style={{ fontSize: 12 }}>
-                Settings, caches and logs. Nothing outside QuillTex’s own
-                folders is touched.
+                {t("dialog.uninstall.appDataHint")}
               </div>
             </span>
           </label>
@@ -881,17 +905,24 @@ function Uninstall({ onClose }: { onClose: () => void }) {
               onChange={(e) => setDeleteProjects(e.target.checked)}
             />
             <span>
-              Also delete my projects
+              {t("dialog.uninstall.alsoProjects")}
               <div className="muted" style={{ fontSize: 12 }}>
-                Moves <span className="mono">{info?.projectsRoot}</span> to the
-                Trash.
+                <T
+                  k="dialog.uninstall.alsoProjectsHint"
+                  values={{
+                    path: <span className="mono">{info?.projectsRoot}</span>,
+                  }}
+                />
               </div>
             </span>
           </label>
           {deleteProjects && (
             <div className="field">
               <label>
-                Type <span className="mono">delete</span> to confirm
+                <T
+                  k="dialog.uninstall.typeToConfirm"
+                  values={{ word: <span className="mono">delete</span> }}
+                />
               </label>
               <input
                 spellCheck={false}
@@ -905,10 +936,7 @@ function Uninstall({ onClose }: { onClose: () => void }) {
             </div>
           )}
           {info?.platform === "windows" && (
-            <div className="banner blue">
-              Windows opens the standard uninstaller, which has the same
-              options.
-            </div>
+            <div className="banner blue">{t("dialog.uninstall.windows")}</div>
           )}
         </>
       )}
@@ -924,6 +952,7 @@ function Prompt({
   d: Extract<import("@/stores/app").Dialog, { kind: "prompt" }>;
   onClose: () => void;
 }) {
+  const t = useT();
   const [value, setValue] = useState(d.initial ?? "");
   const { busy, error, run } = useBusy();
   const submit = () =>
@@ -940,14 +969,15 @@ function Prompt({
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             className="btn primary"
             disabled={!value.trim() || busy}
             onClick={submit}
           >
-            {busy && <Loader2 size={14} className="spin" />} {d.confirm ?? "OK"}
+            {busy && <Loader2 size={14} className="spin" />}{" "}
+            {d.confirm ?? t("common.ok")}
           </button>
         </>
       }
@@ -979,6 +1009,7 @@ function Confirm({
   d: Extract<import("@/stores/app").Dialog, { kind: "confirm" }>;
   onClose: () => void;
 }) {
+  const t = useT();
   const { busy, error, run } = useBusy();
   return (
     <Dialog
@@ -989,7 +1020,7 @@ function Confirm({
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             className={`btn ${d.danger ? "danger solid" : "primary"}`}
@@ -1003,7 +1034,7 @@ function Confirm({
             }
           >
             {busy && <Loader2 size={14} className="spin" />}{" "}
-            {d.confirm ?? "Confirm"}
+            {d.confirm ?? t("common.confirm")}
           </button>
         </>
       }
