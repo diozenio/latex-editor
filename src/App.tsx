@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -17,6 +17,7 @@ import { api, type SyncStatus } from "@/lib/ipc";
 import {
   installGlobalKeybinds,
   syncMenu,
+  useHint,
   useKeybinds,
   useShortcut,
 } from "@/lib/keybinds";
@@ -117,6 +118,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const { current, ui, toggle } = useApp();
   const sidebarKey = useShortcut("toggle-sidebar");
+  const chatHint = useHint("common.aiAssistant", "toggle-chat");
   const sidebarHint = sidebarKey
     ? `${t("common.toggleSidebar")} (${sidebarKey})`
     : t("common.toggleSidebar");
@@ -271,8 +273,9 @@ export default function App() {
             <button
               className={`ai-btn${ui.chat ? " active" : ""}`}
               onClick={() => toggle("chat")}
+              title={chatHint}
             >
-              ✦ {t("common.aiAssistant")}
+              <Sparkles size={14} /> {t("common.aiAssistant")}
             </button>
           </header>
           <div className="panes">
