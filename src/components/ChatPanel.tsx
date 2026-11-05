@@ -2,21 +2,28 @@ import { listen } from "@tauri-apps/api/event";
 import {
   AlertCircle,
   ArrowUp,
+  BookOpen,
   Check,
   Copy,
+  FilePlus,
   Loader2,
   Plus,
   Sparkles,
   Square,
+  Table,
   Terminal,
   Wrench,
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
+import { hasKey, type MessageKey, useT } from "@/lib/i18n";
+import { T } from "@/lib/i18n/T";
 import { api, errorMessage } from "@/lib/ipc";
+import { matches } from "@/lib/keybinds";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
+import { Select } from "./ui/Select";
 
 type Part =
   | { kind: "text"; text: string }
@@ -229,21 +236,66 @@ function ensureListeners() {
 }
 
 const MODELS: [string, string][] = [
-  ["", "Default"],
+  ["", "chat.modelDefault"],
   ["claude-fable-5-1", "Fable 5.1"],
   ["claude-opus-5-5", "Opus 5.5"],
   ["claude-sonnet-5-5", "Sonnet 5.5"],
   ["claude-haiku-5-5", "Haiku 5.5"],
 ];
 
-const SUGGESTIONS = [
-  "Fix the compile errors in this project",
-  "Add an introduction section with a short motivation",
-  "Create a new article project called “Notes” with a bibliography",
-  "Convert this table to booktabs style",
+const SUGGESTIONS: {
+  icon: ReactNode;
+  label: MessageKey;
+  prompt: MessageKey;
+}[] = [
+  {
+    icon: <Wrench size={13} />,
+    label: "chat.suggest.fix.label",
+    prompt: "chat.suggest.fix.prompt",
+  },
+  {
+    icon: <FilePlus size={13} />,
+    label: "chat.suggest.intro.label",
+    prompt: "chat.suggest.intro.prompt",
+  },
+  {
+    icon: <BookOpen size={13} />,
+    label: "chat.suggest.article.label",
+    prompt: "chat.suggest.article.prompt",
+  },
+  {
+    icon: <Table size={13} />,
+    label: "chat.suggest.table.label",
+    prompt: "chat.suggest.table.prompt",
+  },
 ];
 
-export function ChatPanel() {
+function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
+  const t = useT();
+  return (
+    <div className="chat-empty">
+      <div className="chat-empty-title">{t("chat.emptyTitle")}</div>
+      <div className="chat-empty-hint">{t("chat.emptyHint")}</div>
+      <div className="suggestions">
+        {SUGGESTIONS.map((s) => (
+          <button key={s.label} onClick={() => onPick(t(s.prompt))}>
+            {s.icon}
+            <span>{t(s.label)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ChatPanel({
+  docked = false,
+  height,
+}: {
+  docked?: boolean;
+  height?: number;
+}) {
+  const t = useT();
   const toggle = useApp((s) => s.toggle);
   const info = useApp((s) => s.info);
   const setUi = useApp((s) => s.setUi);
@@ -308,14 +360,17 @@ export function ChatPanel() {
   };
 
   return (
-    <aside className="chat">
+    <aside
+      className={`chat${docked ? " docked" : ""}`}
+      style={height ? { height } : undefined}
+    >
       <div className="chat-head">
         <span className="title">
-          <Sparkles size={14} /> Assistant
+          <Sparkles size={14} /> {t("chat.title")}
         </span>
         <button
           className="icon-btn sm"
-          title="New chat"
+          title={t("chat.newChat")}
           onClick={reset}
           disabled={running}
         >
@@ -323,10 +378,10 @@ export function ChatPanel() {
         </button>
         <button
           className="icon-btn sm"
-          title="Close"
+          title={t("common.close")}
           onClick={() => toggle("chat")}
         >
-          <X size={14} />
+          <X size={18} />
         </button>
       </div>
       <div className="chat-body" ref={body}>
@@ -335,35 +390,19 @@ export function ChatPanel() {
             <div className="empty-icon">
               <Terminal size={20} />
             </div>
-            <h3>Claude Code not found</h3>
+            <h3>{t("chat.notFound")}</h3>
             <p>
-              The assistant runs your local Claude Code. Install it, sign in
-              once with <code>claude</code>, then reopen this panel.
+              <T k="chat.notFoundBody" values={{ cmd: <code>claude</code> }} />
             </p>
             <button
               className="btn"
               onClick={() => setUi({ settings: "claude" })}
             >
-              Open settings
+              {t("chat.openSettings")}
             </button>
           </div>
         ) : chat.messages.length === 0 ? (
-          <div style={{ marginTop: "auto" }}>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
-              How can I help?
-            </div>
-            <div className="muted">
-              I can create and edit projects, write LaTeX, fix compile errors
-              and commit, all through QuillTex’s own tools.
-            </div>
-            <div className="suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => send(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+          <EmptyChat onPick={send} />
         ) : (
           chat.messages.map((m) => (
             <div key={m.id} className={`msg ${m.role}`}>
@@ -401,15 +440,15 @@ export function ChatPanel() {
             rows={2}
             placeholder={
               project
-                ? `Ask about “${project.name}”…`
-                : "Ask anything about your projects…"
+                ? t("chat.placeholderProject", { name: project.name })
+                : t("chat.placeholder")
             }
+            data-keys="chat-send"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (
-                e.key === "Enter" &&
-                !e.shiftKey &&
+                matches("chat-send", e.nativeEvent) &&
                 !e.nativeEvent.isComposing
               ) {
                 e.preventDefault();
@@ -420,28 +459,28 @@ export function ChatPanel() {
           />
           <div className="row">
             <span className="ctx">
-              {project ? `Context: ${project.name}` : "Context: all projects"}
+              {project
+                ? t("chat.contextProject", { name: project.name })
+                : t("chat.contextAll")}
             </span>
-            <select
-              className="model-select"
-              title="Model"
+            <Select
+              ghost
+              title={t("chat.model")}
               value={model}
-              onChange={(e) => void saveSettings({ chatModel: e.target.value })}
               disabled={running}
-            >
-              {(MODELS.some(([id]) => id === model)
+              options={(MODELS.some(([id]) => id === model)
                 ? MODELS
                 : [...MODELS, [model, model]]
-              ).map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              ).map(([id, label]) => ({
+                value: id,
+                label: hasKey(label) ? t(label as MessageKey) : label,
+              }))}
+              onChange={(v) => void saveSettings({ chatModel: v })}
+            />
             {running ? (
               <button
                 className="send-btn"
-                title="Stop"
+                title={t("chat.stop")}
                 onClick={() => api.chatCancel(key)}
               >
                 <Square size={11} fill="currentColor" />
@@ -462,36 +501,6 @@ export function ChatPanel() {
   );
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  list_projects: "Listed projects",
-  create_project: "Created project",
-  import_zip: "Imported ZIP",
-  export_zip: "Exported ZIP",
-  rename_project: "Renamed project",
-  delete_project: "Deleted project",
-  list_files: "Listed files",
-  read_file: "Read",
-  write_file: "Wrote",
-  edit_file: "Edited",
-  create_folder: "Created folder",
-  move_path: "Moved",
-  delete_path: "Deleted",
-  compile: "Compiled",
-  get_compile_log: "Read log",
-  set_main_file: "Set main file",
-  git_status: "Git status",
-  git_commit: "Committed",
-  git_log: "Git log",
-  git_diff: "Diff",
-  git_branches: "Branches",
-  git_create_branch: "Created branch",
-  git_checkout: "Switched branch",
-  git_merge: "Merged",
-  git_pull: "Pulled",
-  git_push: "Pushed",
-  git_init: "Initialized git",
-};
-
 function messageText(m: Msg): string {
   return m.parts
     .flatMap((p) => (p.kind === "text" ? [p.text] : []))
@@ -500,12 +509,13 @@ function messageText(m: Msg): string {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   if (!text) return null;
   return (
     <button
       className="btn ghost sm copy-btn"
-      title={copied ? "Copied" : "Copy message"}
+      title={copied ? t("chat.copied") : t("chat.copy")}
       onClick={() => {
         void navigator.clipboard.writeText(text).then(() => {
           setCopied(true);
@@ -519,6 +529,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function ToolCard({ part }: { part: Extract<Part, { kind: "tool" }> }) {
+  const t = useT();
   const short = part.name.replace(/^mcp__quilltex__/, "");
   const arg = (part.input.path ??
     part.input.name ??
@@ -544,7 +555,11 @@ function ToolCard({ part }: { part: Extract<Part, { kind: "tool" }> }) {
       ) : (
         <Check size={13} style={{ color: "var(--green)" }} />
       )}
-      <span className="t-name">{TOOL_LABELS[short] ?? short}</span>
+      <span className="t-name">
+        {hasKey(`chat.tool.${short}`)
+          ? t(`chat.tool.${short}` as MessageKey)
+          : short}
+      </span>
       <span className="t-arg">{String(arg)}</span>
       <Wrench size={12} style={{ opacity: 0.4 }} />
     </div>
