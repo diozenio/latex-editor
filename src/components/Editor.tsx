@@ -39,8 +39,9 @@ import {
 import { tags as t } from "@lezer/highlight";
 import { latex, latexCompletionSource } from "codemirror-lang-latex";
 import { useEffect, useRef } from "react";
+import { createFindPanel } from "@/components/FindPanel";
+import { type MessageKey, t as translate, useLanguage } from "@/lib/i18n";
 import { refCompletion, refreshRefs } from "@/lib/refs";
-import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
 
 const theme = EditorView.theme({
@@ -86,28 +87,15 @@ const theme = EditorView.theme({
     color: "var(--text)",
     borderColor: "var(--border)",
   },
-  ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--border)" },
-  ".cm-panel.cm-search": {
-    padding: "8px 12px",
-    fontFamily: "var(--font-sans)",
-    fontSize: "12px",
-  },
-  ".cm-panel.cm-search input, .cm-panel.cm-search button": {
-    fontFamily: "var(--font-sans)",
-    fontSize: "12px",
-  },
-  ".cm-textfield": {
-    border: "1px solid var(--border-strong)",
-    borderRadius: "6px",
-    background: "var(--bg-elevated)",
-    padding: "3px 6px",
-  },
-  ".cm-button": {
-    backgroundImage: "none",
-    background: "var(--bg-elevated)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: "6px",
-    padding: "2px 8px",
+  ".cm-panels.cm-panels-top": {
+    position: "absolute",
+    top: "10px",
+    right: "18px",
+    left: "auto",
+    width: "auto",
+    border: "none",
+    background: "transparent",
+    zIndex: 10,
   },
   ".cm-tooltip": {
     border: "1px solid var(--border)",
@@ -186,7 +174,33 @@ const highlight = HighlightStyle.define([
   { tag: t.invalid, color: "var(--red)" },
 ]);
 
-const fontSize = new Compartment();
+const PHRASES: [string, MessageKey][] = [
+  ["Find", "editor.search.find"],
+  ["Replace", "editor.search.replace"],
+  ["next", "editor.search.next"],
+  ["previous", "editor.search.previous"],
+  ["all", "editor.search.all"],
+  ["match case", "editor.search.matchCase"],
+  ["regexp", "editor.search.regexp"],
+  ["by word", "editor.search.byWord"],
+  ["replace", "editor.search.replaceOne"],
+  ["replace all", "editor.search.replaceAll"],
+  ["close", "editor.search.close"],
+  ["Go to line", "editor.search.goToLine"],
+  ["go", "editor.search.go"],
+  ["current match", "editor.search.currentMatch"],
+  ["on line", "editor.search.onLine"],
+];
+
+const phrasesSlot = new Compartment();
+
+function phrases() {
+  return EditorState.phrases.of(
+    Object.fromEntries(
+      PHRASES.map(([english, key]) => [english, translate(key)]),
+    ),
+  );
+}
 
 function extensions(
   path: string,
@@ -196,6 +210,7 @@ function extensions(
   const isTex = /\.(tex|sty|cls|ltx|dtx|bib)$/i.test(path);
   const p = useProject.getState;
   return [
+    phrasesSlot.of(phrases()),
     lineNumbers(),
     highlightActiveLineGutter(),
     highlightSpecialChars(),
@@ -213,16 +228,9 @@ function extensions(
     crosshairCursor(),
     highlightActiveLine(),
     highlightSelectionMatches(),
-    search({ top: true }),
+    search({ top: true, createPanel: createFindPanel }),
     EditorView.lineWrapping,
     theme,
-    fontSize.of(
-      EditorView.theme({
-        "&": {
-          fontSize: `${useApp.getState().settings?.editorFontSize ?? 13}px`,
-        },
-      }),
-    ),
     ...(isTex
       ? [
           latex({
@@ -238,16 +246,6 @@ function extensions(
         ]
       : [autocompletion()]),
     keymap.of([
-      {
-        key: "Mod-s",
-        preventDefault: true,
-        run: () => (void p().commit(), true),
-      },
-      {
-        key: "Mod-Enter",
-        preventDefault: true,
-        run: () => (void p().compile(), true),
-      },
       ...closeBracketsKeymap,
       ...defaultKeymap,
       ...searchKeymap,
@@ -306,7 +304,6 @@ export function Editor({ path }: { path: string }) {
   const jump = useProject((s) => s.jump);
   const project = useProject((s) => s.project);
   const tree = useProject((s) => s.tree);
-  const editorFontSize = useApp((s) => s.settings?.editorFontSize ?? 13);
 
   useEffect(() => {
     const v = new EditorView({ parent: host.current! });
@@ -365,6 +362,15 @@ export function Editor({ path }: { path: string }) {
     if (v.state.doc.toString() !== doc.content) replaceDoc(v, doc.content);
   }, [doc?.version, path, doc]);
 
+  const language = useLanguage((s) => s.language);
+  useEffect(() => {
+    const effects = phrasesSlot.reconfigure(phrases());
+    for (const [file, entry] of states.current)
+      if (file !== shown.current)
+        entry.state = entry.state.update({ effects }).state;
+    view.current?.dispatch({ effects });
+  }, [language]);
+
   const tabs = useProject((s) => s.tabs);
   useEffect(() => {
     for (const k of [...states.current.keys()])
@@ -383,14 +389,6 @@ export function Editor({ path }: { path: string }) {
     });
     v.focus();
   }, [jump, path]);
-
-  useEffect(() => {
-    view.current?.dispatch({
-      effects: fontSize.reconfigure(
-        EditorView.theme({ "&": { fontSize: `${editorFontSize}px` } }),
-      ),
-    });
-  }, [editorFontSize, path]);
 
   useEffect(() => {
     if (project) void refreshRefs(project.name, tree);
