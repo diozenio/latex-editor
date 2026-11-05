@@ -1,45 +1,49 @@
-import { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Check,
   ChevronDown,
+  FileDiff,
   GitBranch,
-  GitMerge,
   Github,
+  GitMerge,
   Link2,
   Loader2,
   Minus,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   RotateCcw,
   Trash2,
-  AlertTriangle,
-  FileDiff,
-  MoreHorizontal,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { basename, timeAgo } from "@/lib/format";
+import { t, useT } from "@/lib/i18n";
 import { api, type Branch, type Commit, type FileStatus, type MergeOutcome } from "@/lib/ipc";
+import { matches, useShortcut } from "@/lib/keybinds";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
-import { basename, mod, timeAgo } from "@/lib/format";
-import { ContextMenu, Dropdown, type MenuEntry } from "./ui/Menu";
 import { commitMenu } from "./commitMenu";
 import { SyncBadge } from "./SyncBadge";
+import { ContextMenu, Dropdown, type MenuEntry } from "./ui/Menu";
 
 export function describeMerge(o: MergeOutcome): string {
   switch (o.type) {
     case "UpToDate":
-      return "Already up to date";
+      return t("git.merge.upToDate");
     case "FastForward":
-      return "Updated (fast-forward)";
+      return t("git.merge.fastForward");
     case "Merged":
-      return "Merged successfully";
+      return t("git.merge.merged");
     case "Conflicts":
-      return `Merge has conflicts in ${o.files.length} file(s). Resolve them, then commit.`;
+      return t("git.merge.conflicts", { count: o.files.length });
   }
 }
 
 export function GitPanel() {
+  const t = useT();
+  const kCommit = useShortcut("git-commit");
   const { project, git, refreshGit, openFile } = useProject();
   const app = useApp();
   const sync = useApp((s) => (project ? s.sync[project.name] : undefined));
@@ -81,10 +85,10 @@ export function GitPanel() {
         <div className="empty-icon">
           <GitBranch size={20} />
         </div>
-        <h3>Version control</h3>
-        <p>Track every change with Git, then sync with GitHub. Everything stays inside this project folder.</p>
-        <button className="btn primary" onClick={() => act("init", () => api.gitInit(name), "Repository created")}>
-          Initialize repository
+        <h3>{t("git.versionControl")}</h3>
+        <p>{t("git.intro")}</p>
+        <button className="btn primary" onClick={() => act("init", () => api.gitInit(name), t("git.repoCreated"))}>
+          {t("git.init")}
         </button>
       </div>
     );
@@ -106,12 +110,12 @@ export function GitPanel() {
         await api.gitCommit(name, msg);
         setMessage("");
       },
-      "Committed",
+      t("git.committed"),
     );
   };
 
   const branchItems: MenuEntry[] = [
-    { heading: "Switch branch" },
+    { heading: t("git.switchBranch") },
     ...local.map((b) => ({
       label: b.name,
       icon: <GitBranch size={14} />,
@@ -120,40 +124,40 @@ export function GitPanel() {
         ? undefined
         : {
             icon: <Trash2 size={13} />,
-            label: `Delete ${b.name}`,
+            label: t("git.deleteBranch", { name: b.name }),
             danger: true,
             onClick: () =>
               app.openDialog({
                 kind: "confirm",
-                title: `Delete branch “${b.name}”?`,
-                message: "Commits that only exist on this branch will no longer be reachable.",
+                title: t("git.deleteBranchTitle", { name: b.name }),
+                message: t("git.deleteBranchMessage"),
                 danger: true,
-                confirm: "Delete",
+                confirm: t("common.delete"),
                 onConfirm: () => act("delete", () => api.gitDeleteBranch(name, b.name)),
               }),
           },
-      onSelect: () => !b.isHead && act("checkout", () => api.gitCheckout(name, b.name), `Switched to ${b.name}`),
+      onSelect: () => !b.isHead && act("checkout", () => api.gitCheckout(name, b.name), t("git.switchedTo", { name: b.name })),
     })),
-    ...(remote.length ? [{ heading: "Remote" } as MenuEntry] : []),
+    ...(remote.length ? [{ heading: t("git.remote") } as MenuEntry] : []),
     ...remote.map((b) => ({
       label: b.name,
       icon: <Github size={14} />,
-      onSelect: () => act("checkout", () => api.gitCheckout(name, b.name), `Checked out ${b.name}`),
+      onSelect: () => act("checkout", () => api.gitCheckout(name, b.name), t("git.checkedOut", { name: b.name })),
     })),
     { separator: true },
     {
-      label: "New branch…",
+      label: t("git.newBranchEllipsis"),
       icon: <Plus size={14} />,
       onSelect: () =>
         app.openDialog({
           kind: "prompt",
-          title: "New branch",
-          label: `Created from ${git.branch ?? "HEAD"} and checked out`,
-          confirm: "Create",
-          onSubmit: (b) => act("branch", () => api.gitCreateBranch(name, b.replace(/\s+/g, "-")), `On ${b}`),
+          title: t("git.newBranch"),
+          label: t("git.newBranchLabel", { from: git.branch ?? "HEAD" }),
+          confirm: t("common.create"),
+          onSubmit: (b) => act("branch", () => api.gitCreateBranch(name, b.replace(/\s+/g, "-")), t("git.onBranch", { name: b })),
         }),
     },
-    { label: "Merge into current…", icon: <GitMerge size={14} />, onSelect: () => app.openDialog({ kind: "merge", project: name }) },
+    { label: t("git.mergeIntoCurrent"), icon: <GitMerge size={14} />, onSelect: () => app.openDialog({ kind: "merge", project: name }) },
   ];
 
   return (
@@ -164,7 +168,7 @@ export function GitPanel() {
           trigger={
             <button className="btn sm" style={{ maxWidth: 150 }}>
               <GitBranch size={13} />
-              <span className="ellipsis">{git.branch ?? "detached"}</span>
+              <span className="ellipsis">{git.branch ?? t("git.detached")}</span>
               <ChevronDown size={12} />
             </button>
           }
@@ -176,32 +180,32 @@ export function GitPanel() {
       {git.remoteUrl ? (
         <div className="row" style={{ gap: 4 }}>
           <button className="btn sm grow" disabled={!!busy} onClick={() => act("pull", () => api.gitPull(name))}>
-            {busy === "pull" ? <Loader2 size={13} className="spin" /> : <ArrowDown size={13} />} Pull
+            {busy === "pull" ? <Loader2 size={13} className="spin" /> : <ArrowDown size={13} />} {t("git.pull")}
             {git.behind > 0 && <span className="count" style={{ height: 16 }}>{git.behind}</span>}
           </button>
-          <button className="btn sm grow" disabled={!!busy} onClick={() => act("push", () => api.gitPush(name), "Pushed")}>
-            {busy === "push" ? <Loader2 size={13} className="spin" /> : <ArrowUp size={13} />} Push
+          <button className="btn sm grow" disabled={!!busy} onClick={() => act("push", () => api.gitPush(name), t("git.pushed"))}>
+            {busy === "push" ? <Loader2 size={13} className="spin" /> : <ArrowUp size={13} />} {t("git.push")}
             {git.ahead > 0 && <span className="count" style={{ height: 16 }}>{git.ahead}</span>}
           </button>
-          <button className="icon-btn framed" title="Fetch" disabled={!!busy} onClick={() => act("fetch", () => api.gitFetch(name))}>
+          <button className="icon-btn framed" title={t("git.fetch")} disabled={!!busy} onClick={() => act("fetch", () => api.gitFetch(name))}>
             <RefreshCw size={13} className={busy === "fetch" ? "spin" : ""} />
           </button>
         </div>
       ) : (
         <div className="row" style={{ gap: 4 }}>
           <button className="btn sm grow" onClick={() => app.openDialog({ kind: "publish", project: name })}>
-            <Github size={13} /> Publish to GitHub
+            <Github size={13} /> {t("common.publishToGithub")}
           </button>
           <button
             className="icon-btn framed"
-            title="Add remote URL"
+            title={t("git.addRemote")}
             onClick={() =>
               app.openDialog({
                 kind: "prompt",
-                title: "Link a remote repository",
-                label: "HTTPS URL, e.g. https://github.com/you/thesis.git",
-                confirm: "Link",
-                onSubmit: (url) => act("remote", () => api.gitSetRemote(name, url), "Remote linked"),
+                title: t("git.linkRemoteTitle"),
+                label: t("git.linkRemoteLabel"),
+                confirm: t("git.link"),
+                onSubmit: (url) => act("remote", () => api.gitSetRemote(name, url), t("git.remoteLinked")),
               })
             }
           >
@@ -214,14 +218,14 @@ export function GitPanel() {
         <div className="banner orange">
           <AlertTriangle size={14} style={{ color: "var(--orange)", flex: "none", marginTop: 1 }} />
           <div className="grow">
-            <div style={{ fontWeight: 600 }}>Merge in progress</div>
+            <div style={{ fontWeight: 600 }}>{t("git.mergeInProgress")}</div>
             <div className="muted">
               {conflicted.length
-                ? "Fix the conflict markers, then mark each file resolved."
-                : "All conflicts resolved. Commit to finish the merge."}
+                ? t("git.fixConflicts")
+                : t("git.conflictsResolved")}
             </div>
-            <button className="btn sm" style={{ marginTop: 8 }} onClick={() => act("abort", () => api.gitAbortMerge(name), "Merge aborted")}>
-              Abort merge
+            <button className="btn sm" style={{ marginTop: 8 }} onClick={() => act("abort", () => api.gitAbortMerge(name), t("git.mergeAborted"))}>
+              {t("git.abortMerge")}
             </button>
           </div>
         </div>
@@ -234,75 +238,79 @@ export function GitPanel() {
           autoCapitalize="off"
           autoComplete="off"
           rows={2}
-          placeholder={`Commit message (${mod}↵)`}
+          data-keys="git-commit"
+          placeholder={kCommit ? t("git.commitMessageHint", { key: kCommit }) : t("git.commitMessage")}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) commit();
+            if (matches("git-commit", e.nativeEvent)) {
+              e.preventDefault();
+              commit();
+            }
           }}
         />
         <div className="row">
           <span className="ctx">
-            {staged.length ? `${staged.length} staged` : git.files.length ? "All changes will be committed" : "No changes"}
+            {staged.length ? t("git.stagedCount", { count: staged.length }) : git.files.length ? t("git.allWillCommit") : t("git.noChanges")}
           </span>
           <button className="btn sm primary" disabled={!message.trim() || !git.files.length || !!busy || conflicted.length > 0} onClick={commit}>
-            {busy === "commit" ? <Loader2 size={13} className="spin" /> : <Check size={13} />} Commit
+            {busy === "commit" ? <Loader2 size={13} className="spin" /> : <Check size={13} />} {t("git.commit")}
           </button>
         </div>
       </div>
 
       {staged.length > 0 && (
         <FileGroup
-          title="Staged"
+          title={t("git.staged")}
           files={staged}
           onOpen={(f) => app.openDialog({ kind: "diff", project: name, path: f.path })}
           actions={(f) => (
-            <button className="icon-btn sm" title="Unstage" onClick={() => act("unstage", () => api.gitUnstage(name, [f.path]))}>
+            <button className="icon-btn sm" title={t("git.unstage")} onClick={() => act("unstage", () => api.gitUnstage(name, [f.path]))}>
               <Minus size={13} />
             </button>
           )}
           headerAction={
-            <button className="icon-btn sm" title="Unstage all" onClick={() => act("unstage", () => api.gitUnstage(name, staged.map((f) => f.path)))}>
+            <button className="icon-btn sm" title={t("git.unstageAll")} onClick={() => act("unstage", () => api.gitUnstage(name, staged.map((f) => f.path)))}>
               <Minus size={13} />
             </button>
           }
         />
       )}
       <FileGroup
-        title="Changes"
+        title={t("git.changes")}
         files={unstaged}
-        empty="Working tree clean"
+        empty={t("git.clean")}
         onOpen={(f) =>
           f.kind === "conflicted" ? openFile(f.path) : app.openDialog({ kind: "diff", project: name, path: f.path })
         }
         actions={(f) => (
           <>
             {f.kind === "conflicted" ? (
-              <button className="icon-btn sm" title="Mark resolved" onClick={() => act("resolve", () => api.gitResolve(name, f.path), "Marked resolved")}>
+              <button className="icon-btn sm" title={t("git.markResolved")} onClick={() => act("resolve", () => api.gitResolve(name, f.path), t("git.markedResolved"))}>
                 <Check size={13} />
               </button>
             ) : (
               <>
-                <button className="icon-btn sm" title="Open file" onClick={() => openFile(f.path)}>
+                <button className="icon-btn sm" title={t("git.openFile")} onClick={() => openFile(f.path)}>
                   <FileDiff size={13} />
                 </button>
                 <button
                   className="icon-btn sm"
-                  title="Discard changes"
+                  title={t("git.discard")}
                   onClick={() =>
                     app.openDialog({
                       kind: "confirm",
-                      title: `Discard changes to ${basename(f.path)}?`,
-                      message: f.kind === "new" ? "This new file will be deleted." : "Your edits since the last commit will be lost.",
+                      title: t("git.discardTitle", { name: basename(f.path) }),
+                      message: f.kind === "new" ? t("git.discardNew") : t("git.discardEdits"),
                       danger: true,
-                      confirm: "Discard",
+                      confirm: t("git.discardConfirm"),
                       onConfirm: () => act("discard", () => api.gitDiscard(name, [f.path])),
                     })
                   }
                 >
                   <RotateCcw size={13} />
                 </button>
-                <button className="icon-btn sm" title="Stage" onClick={() => act("stage", () => api.gitStage(name, [f.path]))}>
+                <button className="icon-btn sm" title={t("git.stage")} onClick={() => act("stage", () => api.gitStage(name, [f.path]))}>
                   <Plus size={13} />
                 </button>
               </>
@@ -311,7 +319,7 @@ export function GitPanel() {
         )}
         headerAction={
           unstaged.length > 0 ? (
-            <button className="icon-btn sm" title="Stage all" onClick={() => act("stage", () => api.gitStageAll(name))}>
+            <button className="icon-btn sm" title={t("git.stageAll")} onClick={() => act("stage", () => api.gitStageAll(name))}>
               <Plus size={13} />
             </button>
           ) : undefined
@@ -319,7 +327,7 @@ export function GitPanel() {
       />
 
       <div className="section-label" style={{ paddingLeft: 6 }}>
-        <span>History</span>
+        <span>{t("git.history")}</span>
       </div>
       <div>
         {log.slice(0, 40).map((c, i) => (
@@ -337,7 +345,7 @@ export function GitPanel() {
                     align="end"
                     items={commitMenu(name, c, i === 0)}
                     trigger={
-                      <button className="icon-btn sm" title="Actions">
+                      <button className="icon-btn sm" title={t("common.actions")}>
                         <MoreHorizontal size={13} />
                       </button>
                     }
@@ -350,7 +358,7 @@ export function GitPanel() {
             </div>
           </ContextMenu>
         ))}
-        {!log.length && <div className="muted" style={{ padding: "4px 8px" }}>No commits yet</div>}
+        {!log.length && <div className="muted" style={{ padding: "4px 8px" }}>{t("git.noCommits")}</div>}
       </div>
     </div>
   );
