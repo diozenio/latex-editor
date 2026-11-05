@@ -11,6 +11,7 @@ import {
   Info,
   Loader2,
   MoreHorizontal,
+  PanelLeftClose,
   PanelLeftOpen,
   PanelRight,
   Play,
@@ -22,7 +23,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { basename, mod } from "@/lib/format";
+import { t, useT } from "@/lib/i18n";
 import { api } from "@/lib/ipc";
+import { useHint, useShortcut } from "@/lib/keybinds";
 import { useApp } from "@/stores/app";
 import { tabKind, useProject } from "@/stores/project";
 import { ChatPanel } from "./ChatPanel";
@@ -44,13 +47,18 @@ export async function exportZipFlow() {
   try {
     await useProject.getState().saveAll();
     await api.exportZip(project.name, dest, false);
-    app.toast("Exported ZIP", "success");
+    app.toast(t("workspace.exported"), "success");
   } catch (e) {
     app.fail(e);
   }
 }
 
 export function Workspace() {
+  const t = useT();
+  const sidebarHint = useHint("common.toggleSidebar", "toggle-sidebar");
+  const chatHint = useHint("common.aiAssistant", "toggle-chat");
+  const compileHint = useHint("common.compile", "compile");
+  const kDownload = useShortcut("download-pdf");
   const { ui, toggle, setUi, openDialog } = useApp();
   const { project, active, tabs, compiling, result, git, compile } =
     useProject();
@@ -64,6 +72,40 @@ export function Workspace() {
   });
   const panes = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
+  const editorPane = useRef<HTMLDivElement>(null);
+  const [chatHeight, setChatHeight] = useState(() => {
+    try {
+      return Number(localStorage.getItem("quilltex.chatHeight")) || 320;
+    } catch {
+      return 320;
+    }
+  });
+  const [draggingChat, setDraggingChat] = useState(false);
+
+  useEffect(() => {
+    if (!draggingChat) return;
+    const move = (e: MouseEvent) => {
+      const r = editorPane.current?.getBoundingClientRect();
+      if (!r) return;
+      setChatHeight(
+        Math.min(r.height - 160, Math.max(160, r.bottom - e.clientY)),
+      );
+    };
+    const up = () => setDraggingChat(false);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [draggingChat]);
+
+  useEffect(() => {
+    if (draggingChat) return;
+    try {
+      localStorage.setItem("quilltex.chatHeight", String(chatHeight));
+    } catch {}
+  }, [draggingChat, chatHeight]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -93,16 +135,18 @@ export function Workspace() {
   return (
     <main className="main">
       <header className="topbar drag" data-tauri-drag-region>
-        {!ui.sidebar && (
+        <div className="breadcrumbs" data-tauri-drag-region>
           <button
             className="icon-btn"
-            title={`Show sidebar (${mod}B)`}
+            title={sidebarHint}
             onClick={() => toggle("sidebar")}
           >
-            <PanelLeftOpen size={16} />
+            {ui.sidebar ? (
+              <PanelLeftClose size={16} />
+            ) : (
+              <PanelLeftOpen size={16} />
+            )}
           </button>
-        )}
-        <div className="breadcrumbs" data-tauri-drag-region>
           <span className="dot" style={{ background: project.meta.color }} />
           <span>{project.name}</span>
           {active && (
@@ -124,26 +168,26 @@ export function Workspace() {
         <button
           className={`ai-btn${ui.chat ? " active" : ""}`}
           onClick={() => toggle("chat")}
-          title={`AI assistant (${mod}J)`}
+          title={chatHint}
         >
-          <Sparkles size={14} /> AI assistant
+          <Sparkles size={14} /> {t("common.aiAssistant")}
         </button>
         <button
           className="btn primary"
           onClick={() => compile()}
           disabled={compiling}
-          title={`Compile (${mod}↵)`}
+          title={compileHint}
         >
           {compiling ? (
             <Loader2 size={14} className="spin" />
           ) : (
             <Play size={13} fill="currentColor" />
           )}
-          {compiling ? "Compiling" : "Compile"}
+          {compiling ? t("workspace.compiling") : t("common.compile")}
         </button>
         <button
           className={`icon-btn framed${ui.pdf ? " active" : ""}`}
-          title="Toggle PDF"
+          title={t("workspace.togglePdf")}
           onClick={() => toggle("pdf")}
         >
           <PanelRight size={15} />
@@ -152,30 +196,30 @@ export function Workspace() {
           align="end"
           items={[
             {
-              label: "Download PDF…",
+              label: t("workspace.downloadPdf"),
               icon: <Download size={14} />,
-              right: `${mod}⇧S`,
+              right: kDownload,
               onSelect: downloadPdf,
             },
             {
-              label: "Export as ZIP…",
+              label: t("workspace.exportZip"),
               icon: <FileArchive size={14} />,
               onSelect: exportZipFlow,
             },
             {
-              label: "Show in Finder",
+              label: t("common.showInFinder"),
               icon: <FolderOpen size={14} />,
               onSelect: async () =>
                 revealItemInDir(await api.projectPath(project.name)),
             },
             { separator: true },
             {
-              label: "Project settings…",
+              label: t("workspace.projectSettings"),
               icon: <Settings2 size={14} />,
               onSelect: () => openDialog({ kind: "project-settings" }),
             },
             {
-              label: "Clear build cache",
+              label: t("workspace.clearBuildCache"),
               icon: <Trash size={14} />,
               onSelect: async () => {
                 await api.cleanBuild(project.name);
@@ -184,7 +228,7 @@ export function Workspace() {
             },
           ]}
           trigger={
-            <button className="icon-btn framed" title="More">
+            <button className="icon-btn framed" title={t("common.more")}>
               <MoreHorizontal size={15} />
             </button>
           }
@@ -194,17 +238,34 @@ export function Workspace() {
       <div
         className="panes"
         ref={panes}
-        style={{ cursor: dragging ? "col-resize" : undefined }}
+        style={{
+          cursor: dragging
+            ? "col-resize"
+            : draggingChat
+              ? "row-resize"
+              : undefined,
+        }}
       >
         <div
           className="pane"
+          ref={editorPane}
           style={{
             flex: ui.pdf ? `0 0 ${split * 100}%` : 1,
-            pointerEvents: dragging ? "none" : undefined,
+            pointerEvents: dragging || draggingChat ? "none" : undefined,
           }}
         >
           <Tabs />
           {active ? <ActiveView path={active} /> : <NoFile />}
+          {ui.chat && (
+            <>
+              <div
+                className={`splitter-h${draggingChat ? " active" : ""}`}
+                style={{ pointerEvents: "auto" }}
+                onMouseDown={() => setDraggingChat(true)}
+              />
+              <ChatPanel docked height={chatHeight} />
+            </>
+          )}
           {ui.logs && <Logs />}
           <StatusBar errors={errors} />
         </div>
@@ -222,7 +283,6 @@ export function Workspace() {
             </div>
           </>
         )}
-        {ui.chat && <ChatPanel />}
       </div>
       {tabs.length === 0 && null}
     </main>
@@ -268,6 +328,7 @@ function Tabs() {
 }
 
 function ActiveView({ path }: { path: string }) {
+  const t = useT();
   const kind = tabKind(path);
   const project = useProject((s) => s.project);
   if (kind === "text") return <Editor path={path} />;
@@ -277,14 +338,14 @@ function ActiveView({ path }: { path: string }) {
     <div className="empty">
       <div className="empty-icon">{fileIcon(path, 20)}</div>
       <h3>{basename(path)}</h3>
-      <p>This file can’t be edited here.</p>
+      <p>{t("workspace.cantEdit")}</p>
       <button
         className="btn"
         onClick={async () =>
           revealItemInDir(await api.projectPath(project!.name, path))
         }
       >
-        Show in Finder
+        {t("common.showInFinder")}
       </button>
     </div>
   );
@@ -308,15 +369,22 @@ function ImagePreview({ project, path }: { project: string; path: string }) {
 }
 
 function NoFile() {
+  const t = useT();
+  const kPalette = useShortcut("command-palette");
   return (
     <div className="empty" style={{ background: "var(--bg-elevated)" }}>
-      <h3>No file open</h3>
-      <p>Pick a file in the sidebar, or press {mod}K to search.</p>
+      <h3>{t("workspace.noFile")}</h3>
+      <p>
+        {kPalette
+          ? t("workspace.noFileHintKey", { key: kPalette })
+          : t("workspace.noFileHint")}
+      </p>
     </div>
   );
 }
 
 function Logs() {
+  const t = useT();
   const { result, openFile, project } = useProject();
   const setUi = useApp((s) => s.setUi);
   const [raw, setRaw] = useState(false);
@@ -324,13 +392,13 @@ function Logs() {
   return (
     <div className="logs">
       <div className="logs-head">
-        <strong style={{ fontSize: 12 }}>Logs</strong>
+        <strong style={{ fontSize: 12 }}>{t("logs.title")}</strong>
         <div className="seg" style={{ margin: 0, width: 160 }}>
           <button className={!raw ? "on" : ""} onClick={() => setRaw(false)}>
-            Issues
+            {t("logs.issues")}
           </button>
           <button className={raw ? "on" : ""} onClick={() => setRaw(true)}>
-            Raw log
+            {t("logs.raw")}
           </button>
         </div>
         <div className="grow" />
@@ -340,10 +408,10 @@ function Logs() {
       </div>
       <div className="logs-body">
         {raw ? (
-          <pre className="raw-log">{result?.log || "No log yet."}</pre>
+          <pre className="raw-log">{result?.log || t("logs.noLog")}</pre>
         ) : items.length === 0 ? (
           <div className="muted" style={{ padding: 12 }}>
-            {result ? "No issues. 🎉" : "Compile to see issues."}
+            {result ? t("logs.noIssues") : t("logs.compileToSee")}
           </div>
         ) : (
           items.map((d, i) => (
@@ -392,6 +460,7 @@ function Logs() {
 }
 
 function StatusBar({ errors }: { errors: number }) {
+  const t = useT();
   const {
     result,
     compiling,
@@ -422,22 +491,24 @@ function StatusBar({ errors }: { errors: number }) {
         {compiling ? (
           <>
             <Loader2 size={11} className="spin" />{" "}
-            {compileStatus ?? "Compiling"}
+            {compileStatus ?? t("status.compiling")}
           </>
         ) : result ? (
           result.ok ? (
             <>
               <CheckCircle2 size={11} style={{ color: "var(--green)" }} />{" "}
-              Compiled in {(result.durationMs / 1000).toFixed(1)}s
+              {t("status.compiledIn", {
+                seconds: (result.durationMs / 1000).toFixed(1),
+              })}
             </>
           ) : (
             <span className="err">
-              <AlertCircle size={11} /> Failed
+              <AlertCircle size={11} /> {t("status.failed")}
             </span>
           )
         ) : (
           <>
-            <Terminal size={11} /> Not compiled
+            <Terminal size={11} /> {t("status.notCompiled")}
           </>
         )}
       </button>
@@ -454,14 +525,14 @@ function StatusBar({ errors }: { errors: number }) {
       <div className="grow" />
       {active?.endsWith(".tex") && (
         <button
-          title={`Or ${mod}-click in the editor`}
+          title={t("status.jumpHint", { mod })}
           onClick={() => active && forwardSearch(active, cursorLine)}
         >
-          Show in PDF →
+          {t("status.showInPdf")}
         </button>
       )}
-      {words != null && <span>{words.toLocaleString()} words</span>}
-      {active && <span>Ln {cursorLine}</span>}
+      {words != null && <span>{t("status.words", { count: words })}</span>}
+      {active && <span>{t("status.line", { line: cursorLine })}</span>}
       <span>
         {project?.meta.engine === "tectonic"
           ? "Tectonic"
