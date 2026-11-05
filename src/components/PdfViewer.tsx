@@ -20,7 +20,9 @@ import {
   useState,
 } from "react";
 import { basename, mod } from "@/lib/format";
+import { t, useT } from "@/lib/i18n";
 import { api } from "@/lib/ipc";
+import { useHint, useShortcut } from "@/lib/keybinds";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
 
@@ -37,7 +39,7 @@ export async function downloadPdf() {
   const app = useApp.getState();
   if (!project) return;
   if (!result?.pdf) {
-    app.toast("Compile the project first", "error");
+    app.toast(t("pdf.compileFirst"), "error");
     return;
   }
   const stem = basename(project.meta.mainFile).replace(/\.tex$/i, "");
@@ -48,13 +50,16 @@ export async function downloadPdf() {
   if (!dest) return;
   try {
     await api.savePdfAs(project.name, dest);
-    app.toast("PDF saved", "success");
+    app.toast(t("pdf.saved"), "success");
   } catch (e) {
     app.fail(e);
   }
 }
 
 export function PdfViewer() {
+  const t = useT();
+  const recompileHint = useHint("pdf.recompile", "compile");
+  const kCompile = useShortcut("compile");
   const {
     project,
     session,
@@ -180,11 +185,11 @@ export function PdfViewer() {
       <div className="pdf-toolbar">
         <button
           className="icon-btn sm"
-          title={`Recompile (${mod}↵)`}
+          title={recompileHint}
           onClick={() => compile()}
           disabled={compiling}
         >
-          <RefreshCw size={13} className={compiling ? "spin" : ""} />
+          <RefreshCw size={18} className={compiling ? "spin" : ""} />
         </button>
         <span className="muted" style={{ marginLeft: 4 }}>
           {doc ? `${page} / ${doc.numPages}` : "—"}
@@ -192,33 +197,33 @@ export function PdfViewer() {
         <div className="grow" />
         <button
           className="icon-btn sm"
-          title="Zoom out"
+          title={t("pdf.zoomOut")}
           onClick={() => setZoomPersist(Math.max(0.3, +(z - 0.1).toFixed(2)))}
         >
-          <Minus size={13} />
+          <Minus size={18} />
         </button>
         <span className="zoom">{Math.round(z * 100)}%</span>
         <button
           className="icon-btn sm"
-          title="Zoom in"
+          title={t("pdf.zoomIn")}
           onClick={() => setZoomPersist(Math.min(4, +(z + 0.1).toFixed(2)))}
         >
-          <Plus size={13} />
+          <Plus size={18} />
         </button>
         <button
           className={`icon-btn sm${zoom === "fit" ? " active" : ""}`}
-          title="Fit width"
+          title={t("pdf.fitWidth")}
           onClick={() => setZoomPersist("fit")}
         >
-          <Maximize2 size={12} />
+          <Maximize2 size={18} />
         </button>
         <button
           className="icon-btn sm"
-          title="Download PDF"
+          title={t("common.downloadPdf")}
           onClick={downloadPdf}
           disabled={!result?.pdf}
         >
-          <Download size={13} />
+          <Download size={18} />
         </button>
       </div>
       <div className="pdf-scroll" ref={scroller} onScroll={onScroll}>
@@ -240,21 +245,20 @@ export function PdfViewer() {
             {compiling ? (
               <>
                 <Loader2 size={20} className="spin" />
-                <p>
-                  Compiling… The first run downloads LaTeX packages and can take
-                  a minute.
-                </p>
+                <p>{t("pdf.compilingFirst")}</p>
               </>
             ) : (
               <>
                 <div className="empty-icon">
                   <FileText size={20} />
                 </div>
-                <h3>{errors ? "Compilation failed" : "No PDF yet"}</h3>
+                <h3>{errors ? t("pdf.failed") : t("pdf.none")}</h3>
                 <p>
                   {errors
-                    ? "Check the logs below the editor."
-                    : `Press ${mod}↵ to compile.`}
+                    ? t("pdf.checkLogs")
+                    : kCompile
+                      ? t("pdf.pressToCompile", { key: kCompile })
+                      : t("pdf.pressCompile")}
                 </p>
               </>
             )}
@@ -282,6 +286,7 @@ const PdfPage = memo(function PdfPage({
   nonce: number;
   onInverse: (x: number, y: number) => void;
 }) {
+  const t = useT();
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(index <= 2);
@@ -336,7 +341,7 @@ const PdfPage = memo(function PdfPage({
       ref={wrap}
       className="pdf-page"
       style={{ width: w, height: h }}
-      title={`${mod}-click to jump to the source`}
+      title={t("pdf.jumpToSource", { mod })}
       onClick={(e) => {
         if (!(e.metaKey || e.ctrlKey)) return;
         const r = e.currentTarget.getBoundingClientRect();
