@@ -565,6 +565,87 @@ fn exe(name: &str) -> String {
     if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledPackage {
+    pub name: String,
+    pub revision: u32,
+    pub description: String,
+    pub size: u64,
+}
+
+pub fn installed_version(root: &Path) -> Option<String> {
+    std::fs::read_to_string(root.join(READY_MARKER)).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+}
+
+pub fn installed_packages(root: &Path) -> Vec<InstalledPackage> {
+    let Ok(bytes) = std::fs::read(root.join("tlpkg/texlive.tlpdb")) else {
+        return Vec::new();
+    };
+    parse_tlpdb(&String::from_utf8_lossy(&bytes))
+}
+
+fn parse_tlpdb(text: &str) -> Vec<InstalledPackage> {
+    const BLOCK: u64 = 4096;
+    let mut found: Vec<InstalledPackage> = Vec::new();
+    let mut flush = |cur: &mut Option<(InstalledPackage, bool)>| {
+        let Some((pkg, is_package)) = cur.take() else { return };
+        if !is_package {
+            return;
+        }
+        let base = pkg.name.split('.').next().unwrap_or(&pkg.name).to_string();
+        match found.iter_mut().find(|p| p.name == base) {
+            Some(existing) => {
+                existing.size += pkg.size;
+                if pkg.name == base {
+                    existing.revision = pkg.revision;
+                    existing.description = pkg.description;
+                }
+            }
+            None => found.push(InstalledPackage { name: base, ..pkg }),
+        }
+    };
+    let mut cur: Option<(InstalledPackage, bool)> = None;
+    for line in text.lines() {
+        if line.is_empty() {
+            flush(&mut cur);
+            continue;
+        }
+        let (key, value) = line.split_once(' ').unwrap_or((line, ""));
+        match key {
+            "name" => {
+                flush(&mut cur);
+                cur = Some((InstalledPackage { name: value.to_string(), revision: 0, description: String::new(), size: 0 }, false));
+            }
+            "category" => {
+                if let Some((_, is_package)) = cur.as_mut() {
+                    *is_package = value == "Package";
+                }
+            }
+            "revision" => {
+                if let Some((pkg, _)) = cur.as_mut() {
+                    pkg.revision = value.parse().unwrap_or(0);
+                }
+            }
+            "shortdesc" => {
+                if let Some((pkg, _)) = cur.as_mut() {
+                    pkg.description = value.to_string();
+                }
+            }
+            "runfiles" | "binfiles" => {
+                let blocks = value.split_whitespace().find_map(|t| t.strip_prefix("size=")).and_then(|n| n.parse::<u64>().ok());
+                if let (Some((pkg, _)), Some(n)) = (cur.as_mut(), blocks) {
+                    pkg.size += n * BLOCK;
+                }
+            }
+            _ => {}
+        }
+    }
+    flush(&mut cur);
+    found.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -668,5 +749,14 @@ runfiles size=2\n RELOC/tex/latex/foo/foo.sty\n RELOC/tex/latex/foo/foo-extra.st
         install(&root, Some(&archive), &|_| {}).unwrap();
         assert!(is_installed(&root));
         assert!(!tmp.path().join("data/texlive.partial").exists());
+    }
+
+    #[test]
+    fn lists_installed_packages_and_folds_arch_variants() {
+        let db = "name 00texlive.config\ncategory TLCore\n\nname xetex\ncategory Package\nrevision 7\nshortdesc XeTeX\nrunfiles size=2\n\nname xetex.universal-darwin\ncategory Package\nrevision 7\nbinfiles arch=universal-darwin size=3\n\nname collection-basic\ncategory Collection\nrunfiles size=9\n";
+        let pkgs = parse_tlpdb(db);
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!((pkgs[0].name.as_str(), pkgs[0].revision, pkgs[0].size), ("xetex", 7, 5 * 4096));
+        assert_eq!(pkgs[0].description, "XeTeX");
     }
 }
