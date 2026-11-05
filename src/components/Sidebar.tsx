@@ -1,44 +1,41 @@
 import {
+  Check,
   ChevronDown,
   FilePlus2,
+  Files,
   FolderPlus,
   GitBranch,
-  Files,
-  Home as HomeIcon,
-  PanelLeftClose,
+  LayoutGrid,
+  Plus,
   Search,
   Settings as SettingsIcon,
-  Plus,
-  Check,
-  LayoutGrid,
 } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { useShortcut } from "@/lib/keybinds";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
-import { mod } from "@/lib/format";
-import { Dropdown } from "./ui/Menu";
 import { FileTree, treeActions } from "./FileTree";
 import { GitPanel } from "./GitPanel";
 import { UpdateButton } from "./UpdateButton";
+import { Dropdown } from "./ui/Menu";
 
 export function Sidebar() {
-  const { ui, setUi, toggle, projects, current, openProject, openDialog } = useApp();
+  const t = useT();
+  const kPalette = useShortcut("command-palette");
+  const { ui, setUi, projects, current, openProject, openDialog } = useApp();
   const project = useProject((s) => s.project);
   const changes = useProject((s) => s.git?.files.length ?? 0);
 
   return (
     <aside className={`sidebar${ui.sidebar ? "" : " collapsed"}`}>
-      <div className="sidebar-head drag" data-tauri-drag-region>
-        <button className="icon-btn" title={`Hide sidebar (${mod}B)`} onClick={() => toggle("sidebar")}>
-          <PanelLeftClose size={16} />
-        </button>
-      </div>
+      <div className="sidebar-head drag" data-tauri-drag-region />
 
       <div style={{ padding: "0 8px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
         <Dropdown
           items={[
-            { label: "All projects", icon: <LayoutGrid size={14} />, onSelect: () => openProject(null) },
+            { label: t("common.allProjects"), icon: <LayoutGrid size={14} />, onSelect: () => openProject(null) },
             { separator: true },
-            { heading: "Projects" },
+            { heading: t("common.projects") },
             ...projects.slice(0, 12).map((p) => ({
               label: p.name,
               icon: <span className="dot" style={{ background: p.meta.color }} />,
@@ -46,7 +43,7 @@ export function Sidebar() {
               onSelect: () => openProject(p.name),
             })),
             { separator: true },
-            { label: "New project…", icon: <Plus size={14} />, onSelect: () => openDialog({ kind: "new-project" }) },
+            { label: `${t("common.newProject")}…`, icon: <Plus size={14} />, onSelect: () => openDialog({ kind: "new-project" }) },
           ]}
           trigger={
             <button className="nav-item" style={{ height: 36 }}>
@@ -76,8 +73,8 @@ export function Sidebar() {
         />
         <button className="search-field" onClick={() => setUi({ palette: true })}>
           <Search size={14} />
-          <span>Quick search</span>
-          <span className="kbd">{mod}K</span>
+          <span>{t("sidebar.quickSearch")}</span>
+          {kPalette && <span className="kbd">{kPalette}</span>}
         </button>
       </div>
 
@@ -85,24 +82,26 @@ export function Sidebar() {
         {project ? (
           <>
             <div className="seg">
-              <button className={ui.sidebarTab === "files" ? "on" : ""} onClick={() => setUi({ sidebarTab: "files" })}>
-                <Files size={13} /> Files
+              <button title={t("common.files")} className={ui.sidebarTab === "files" ? "on" : ""} onClick={() => setUi({ sidebarTab: "files" })}>
+                <Files size={13} />
+                <span className="seg-label">{t("common.files")}</span>
               </button>
-              <button className={ui.sidebarTab === "git" ? "on" : ""} onClick={() => setUi({ sidebarTab: "git" })}>
-                <GitBranch size={13} /> Source control
+              <button title={t("common.sourceControl")} className={ui.sidebarTab === "git" ? "on" : ""} onClick={() => setUi({ sidebarTab: "git" })}>
+                <GitBranch size={13} />
+                <span className="seg-label">{t("common.sourceControl")}</span>
                 {changes > 0 && <span className="count" style={{ height: 16, minWidth: 16 }}>{changes}</span>}
               </button>
             </div>
             {ui.sidebarTab === "files" ? (
               <>
                 <div className="section-label">
-                  <span>Files</span>
+                  <span>{t("common.files")}</span>
                   <span className="row" style={{ gap: 0 }}>
-                    <button className="icon-btn sm" title="New file" onClick={() => treeActions.newFile()}>
-                      <FilePlus2 size={13} />
+                    <button className="icon-btn sm" title={t("common.newFile")} onClick={() => treeActions.newFile()}>
+                      <FilePlus2 size={18} />
                     </button>
-                    <button className="icon-btn sm" title="New folder" onClick={() => treeActions.newFolder()}>
-                      <FolderPlus size={13} />
+                    <button className="icon-btn sm" title={t("common.newFolder")} onClick={() => treeActions.newFolder()}>
+                      <FolderPlus size={18} />
                     </button>
                   </span>
                 </div>
@@ -114,12 +113,8 @@ export function Sidebar() {
           </>
         ) : (
           <>
-            <button className="nav-item active">
-              <HomeIcon size={16} />
-              <span className="label">Home</span>
-            </button>
             <div className="section-label">
-              <span>Projects</span>
+              <span>{t("common.projects")}</span>
               <span className="count">{projects.length}</span>
             </div>
             {projects.map((p) => (
@@ -133,15 +128,10 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar-foot">
-        <button className="icon-btn" title="Settings" onClick={() => setUi({ settings: "general" })}>
+        <button className="nav-item" onClick={() => setUi({ settings: "general" })}>
           <SettingsIcon size={16} />
+          <span className="label">{t("common.settings")}</span>
         </button>
-        {project && (
-          <button className="icon-btn" title="All projects" onClick={() => openProject(null)}>
-            <HomeIcon size={16} />
-          </button>
-        )}
-        <span className="grow" />
         <UpdateButton />
       </div>
     </aside>
