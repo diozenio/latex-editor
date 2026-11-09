@@ -175,7 +175,8 @@ pub fn definitions() -> Vec<Value> {
     vec![
         tool("list_projects", "List all QuillTex projects with their main file and last modification.", json!({}), &[]),
         tool("list_templates", "List available project templates.", json!({}), &[]),
-        tool("create_project", "Create a new project from a template (blank, article, report, beamer, letter, cv).",
+        tool("create_project", "Create a new project from a template (document, blank, article, report, beamer, cv). \
+            `document` is a rich-text Markdown document (main.md) for writing without LaTeX.",
             json!({ "name": { "type": "string" }, "template": { "type": "string" } }), &["name"]),
         tool("import_zip", "Create a project from a .zip file on disk.",
             json!({ "zip_path": { "type": "string" }, "name": { "type": "string" } }), &["zip_path"]),
@@ -184,7 +185,7 @@ pub fn definitions() -> Vec<Value> {
         tool("rename_project", "Rename a project. Afterwards refer to it only by its new name.", json!({ "project": p, "new_name": { "type": "string" } }), &["project", "new_name"]),
         tool("delete_project", "Move a project to the OS trash (recoverable).", json!({ "project": p }), &["project"]),
         tool("get_project_settings", "Show project settings (main file, engine).", json!({ "project": p }), &["project"]),
-        tool("set_main_file", "Set the root .tex file that gets compiled.", json!({ "project": p, "path": path }), &["project", "path"]),
+        tool("set_main_file", "Set the root file that gets compiled: a .tex file, or a .md document.", json!({ "project": p, "path": path }), &["project", "path"]),
         tool("list_files", "List every file in a project.", json!({ "project": p }), &["project"]),
         tool("read_file", "Read a text file.", json!({ "project": p, "path": path }), &["project", "path"]),
         tool("write_file", "Create or overwrite a text file (parent folders are created).",
@@ -196,7 +197,7 @@ pub fn definitions() -> Vec<Value> {
         tool("move_path", "Move or rename a file or folder inside a project.",
             json!({ "project": p, "from": path, "to": path }), &["project", "from", "to"]),
         tool("delete_path", "Move a file or folder to the OS trash.", json!({ "project": p, "path": path }), &["project", "path"]),
-        tool("compile", "Compile the project to PDF and return errors and warnings.", json!({ "project": p }), &["project"]),
+        tool("compile", "Compile the project to PDF and return errors and warnings. Markdown documents are typeset through LaTeX.", json!({ "project": p }), &["project"]),
         tool("get_compile_log", "Return the tail of the last TeX log.", json!({ "project": p }), &["project"]),
         tool("git_status", "Branch, ahead/behind origin, and changed files.", json!({ "project": p }), &["project"]),
         tool("git_init", "Initialize a git repository in the project.", json!({ "project": p }), &["project"]),

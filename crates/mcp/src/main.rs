@@ -96,7 +96,9 @@ fn error(id: Value, code: i32, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
-const INSTRUCTIONS: &str = "QuillTex is a local LaTeX editor. Each project is a folder of plain files. \
+const INSTRUCTIONS: &str = "QuillTex is a local LaTeX and document editor. Each project is a folder of plain files. \
+Projects whose main file is .md are rich-text documents: edit them as plain Markdown, without LaTeX, keeping the front matter; \
+color text with <span style=\"color: #c62828\">…</span> (a #hex or common color name). \
 Use these tools to list, create, edit and compile projects. Paths are relative to the project root. \
 Prefer edit_file for small changes and always compile after editing to check for errors. \
 Never ask to access files outside the projects folder; it is not possible.";
