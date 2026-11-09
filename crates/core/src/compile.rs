@@ -6,7 +6,7 @@ use serde::Serialize;
 use wait_timeout::ChildExt;
 
 use crate::project::{self, Engine, BUILD_DIR};
-use crate::{texlive, Error, Result, Workspace};
+use crate::{markdown, texlive, Error, Result, Workspace};
 
 const TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -80,6 +80,15 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
     let stem = main.file_stem().unwrap().to_string_lossy().to_string();
     let pdf_path = out_dir.join(format!("{stem}.pdf"));
     let _ = std::fs::remove_file(&pdf_path);
+    let document = markdown::is_document(&meta.main_file);
+    let source = if document {
+        let md = std::fs::read_to_string(&main)?;
+        let tex = markdown::to_latex(&md, &|p| ws.resolve(name, p).is_ok_and(|p| p.is_file()));
+        std::fs::write(out_dir.join(format!("{stem}.tex")), tex)?;
+        format!("{BUILD_DIR}/{stem}.tex")
+    } else {
+        meta.main_file.clone()
+    };
 
     let started = Instant::now();
     let (success, console) = match meta.engine {
@@ -91,7 +100,7 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
             let mut c = Command::new(bin);
             c.args(["-X", "compile", "--synctex", "--keep-logs", "--untrusted", "--outdir"])
                 .arg(&out_dir)
-                .arg(&meta.main_file);
+                .arg(&source);
             if let Some(cache) = &tc.tectonic_cache {
                 c.env("TECTONIC_CACHE_DIR", cache);
             }
@@ -118,7 +127,7 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
                 }
                 c.args([flag, "-interaction=nonstopmode", "-file-line-error", "-synctex=1", "-halt-on-error"])
                     .arg(format!("-outdir={}", out_dir.display()))
-                    .arg(&meta.main_file);
+                    .arg(&source);
                 Ok(c)
             };
             let mut notes = String::new();
@@ -193,6 +202,13 @@ pub fn compile_with(ws: &Workspace, name: &str, tc: &Toolchain, status: &dyn Fn(
     for d in parse_log(&tex_log) {
         if !diagnostics.iter().any(|x| x.message == d.message && x.line == d.line) {
             diagnostics.push(d);
+        }
+    }
+    if document {
+        // Errors point into the generated LaTeX, which the user never sees.
+        for d in &mut diagnostics {
+            d.file = Some(meta.main_file.clone());
+            d.line = None;
         }
     }
     let pdf_exists = pdf_path.is_file();
@@ -377,6 +393,22 @@ l.99 \\end
         let r = compile(&ws, "p", &tc).unwrap();
         assert!(r.ok, "{}", r.log);
         assert!(ws.root().join("p/.quilltex/build/main.synctex.gz").exists());
+    }
+
+    #[test]
+    fn compiles_a_markdown_document_with_tectonic() {
+        let bin = std::env::var_os("QUILLTEX_TECTONIC").map(PathBuf::from).or_else(|| {
+            let p = std::env::var_os("PATH")?;
+            std::env::split_paths(&p).map(|d| d.join(exe("tectonic"))).find(|p| p.is_file())
+        });
+        let Some(bin) = bin else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(tmp.path()).unwrap();
+        project::create(&ws, "d", "document").unwrap();
+        let tc = Toolchain { tectonic: Some(bin), ..Default::default() };
+        let r = compile(&ws, "d", &tc).unwrap();
+        assert!(r.ok, "{}", r.log);
+        assert!(ws.root().join("d/.quilltex/build/main.pdf").exists());
     }
 
     #[test]
