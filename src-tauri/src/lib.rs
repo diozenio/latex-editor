@@ -51,7 +51,7 @@ fn build_menu(
         &item("export-zip", "Export as ZIP…", None)?,
         &item("download-pdf", "Download PDF…", acc("download-pdf", "CmdOrCtrl+Shift+S"))?,
         &PredefinedMenuItem::separator(app)?,
-        &PredefinedMenuItem::close_window(app, Some(&l("menu.closeWindow", "Close Window")))?,
+        &item("close-file", "Close File", acc("close-file", "CmdOrCtrl+W"))?,
     ])?;
     let edit = Submenu::with_items(app, l("menu.edit", "Edit"), true, &[
         &PredefinedMenuItem::undo(app, Some(&l("menu.undo", "Undo")))?,

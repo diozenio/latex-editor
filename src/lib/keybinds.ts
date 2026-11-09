@@ -104,6 +104,14 @@ export const ACTIONS: KeyAction[] = [
     menu: true,
   },
   {
+    id: "close-file",
+    label: "keys.action.close-file",
+    group: "keys.group.project",
+    scope: "global",
+    default: "Mod+W",
+    menu: true,
+  },
+  {
     id: "new-file",
     label: "keys.action.new-file",
     group: "keys.group.project",
@@ -369,7 +377,7 @@ const MENU_LABELS = [
   "save",
   "export-zip",
   "download-pdf",
-  "closeWindow",
+  "close-file",
   "edit",
   "undo",
   "redo",

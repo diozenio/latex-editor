@@ -50,6 +50,8 @@ function runAction(id: string) {
       return;
     case "save":
       return proj.commit();
+    case "close-file":
+      return proj.active ? proj.closeTab(proj.active) : undefined;
     case "export-zip":
       return exportZipFlow();
     case "download-pdf":
