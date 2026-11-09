@@ -506,6 +506,10 @@ button {
   background: var(--bg-elevated);
   -webkit-app-region: no-drag;
 }
+button.tag {
+  height: 28px;
+  padding: 0 10px;
+}
 .tag.green {
   color: var(--green);
   background: var(--green-soft);
