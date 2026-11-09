@@ -63,6 +63,7 @@ interface UI {
   pdf: boolean;
   chat: boolean;
   logs: boolean;
+  commentMarks: boolean;
   sidebarTab: "files" | "git";
   palette: boolean;
   settings: SettingsTab | null;
@@ -102,6 +103,7 @@ function loadUi(): UI {
     pdf: true,
     chat: false,
     logs: false,
+    commentMarks: true,
     sidebarTab: "files",
     palette: false,
     settings: null,

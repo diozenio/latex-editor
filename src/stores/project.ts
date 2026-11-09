@@ -10,6 +10,7 @@ import {
   type RepoStatus,
 } from "@/lib/ipc";
 import { useApp } from "./app";
+import { COMMENTS_FILE, useComments } from "./comments";
 
 export type TabKind = "text" | "image" | "pdf" | "binary";
 
@@ -116,7 +117,11 @@ export const useProject = create<ProjectState>((set, get) => ({
         git: null,
         pdfVersion: Date.now(),
       });
-      await Promise.all([get().refreshTree(), get().refreshGit()]);
+      await Promise.all([
+        get().refreshTree(),
+        get().refreshGit(),
+        useComments.getState().load(name),
+      ]);
       let restored: string[] = [];
       try {
         restored = JSON.parse(
@@ -149,6 +154,7 @@ export const useProject = create<ProjectState>((set, get) => ({
         const project = await api.projectSummary(to);
         if (get().project?.name !== from) return;
         set({ project });
+        useComments.setState({ project: to });
         if (app.current === from) app.openProject(to);
         void get().saveAll();
         await Promise.all([get().refreshTree(), get().refreshGit()]);
@@ -161,6 +167,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   unload() {
+    useComments.getState().unload();
     saveTimers.forEach((t) => clearTimeout(t));
     saveTimers.clear();
     void get().saveAll();
@@ -369,6 +376,8 @@ export const useProject = create<ProjectState>((set, get) => ({
     void get().refreshGit();
     if (fileChanges.some((x) => x === ".quilltex/project.json"))
       void get().refreshMeta();
+    if (fileChanges.some((x) => x === COMMENTS_FILE))
+      void useComments.getState().reload();
 
     let texChanged = false;
     for (const path of fileChanges) {
@@ -437,6 +446,7 @@ export const useProject = create<ProjectState>((set, get) => ({
           : p;
     const nextDocs: Record<string, Doc> = {};
     for (const [k, v] of Object.entries(docs)) nextDocs[map(k)] = v;
+    useComments.getState().renamed(from, to);
     const nextTabs = tabs.map(map);
     set({
       tabs: nextTabs,
@@ -447,6 +457,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   removed(path) {
+    useComments.getState().removed(path);
     for (const t of get().tabs.filter(
       (t) => t === path || t.startsWith(path + "/"),
     )) {
