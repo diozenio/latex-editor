@@ -7,10 +7,22 @@ pub const TEMPLATES: &[(&str, &str)] = &[
     ("document", "Markdown"),
 ];
 
-pub fn files(template: &str, title: &str) -> Vec<(&'static str, String)> {
+const LANDSCAPE: &[u8] = include_bytes!("../assets/landscape.png");
+
+pub fn files(template: &str, title: &str) -> Vec<(&'static str, Vec<u8>)> {
     if template == "document" {
-        return vec![("main.md", document(title))];
+        return vec![
+            ("main.md", document(title).into_bytes()),
+            ("images/landscape.png", LANDSCAPE.to_vec()),
+        ];
     }
+    text_files(template, title)
+        .into_iter()
+        .map(|(path, content)| (path, content.into_bytes()))
+        .collect()
+}
+
+fn text_files(template: &str, title: &str) -> Vec<(&'static str, String)> {
     let title = escape(title);
     match template {
         "article" => vec![
@@ -146,7 +158,9 @@ paper: a4
 
 # Introduction
 
-Start writing here. Text can be **bold**, *italic*, <u>underlined</u>, ~~struck through~~ or <span style="color: #c62828">colored</span>, and have [links](https://example.com). Images go in the project and are shown with `![caption](images/photo.png)`.
+Start writing here. Text can be **bold**, *italic*, <u>underlined</u>, ~~struck through~~ or <span style="color: #c62828">colored</span>, and have [links](https://example.com). Images go in the project and are shown with `![caption](images/landscape.png)`:
+
+![Sunset over the hills](images/landscape.png)
 
 <span style="color: #2e7d32">[new] This sentence was added in the latest revision.</span> <span style="color: #c62828">[remove] This one is marked to be cut.</span> Any passage can <span style="color: #1565c0">change color</span>, with a hex code like `#1565c0` or a name like `green`, `orange` or `purple`.
 
