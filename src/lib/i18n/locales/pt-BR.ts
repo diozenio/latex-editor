@@ -312,8 +312,11 @@ export const ptBR: Messages = {
   "template.article": "Artigo",
   "template.report": "Relatório",
   "template.beamer": "Apresentação (Beamer)",
-  "template.letter": "Carta",
   "template.cv": "Currículo",
+  "template.document": "Markdown",
+  "doc.preview": "Prévia",
+  "doc.pages.one": "{count} página",
+  "doc.pages.other": "{count} páginas",
 
   "dialog.newProject.desc":
     "Uma nova pasta é criada no diretório dos seus projetos.",

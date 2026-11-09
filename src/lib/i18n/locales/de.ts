@@ -316,8 +316,11 @@ export const de: Messages = {
   "template.article": "Artikel",
   "template.report": "Bericht",
   "template.beamer": "Präsentation (Beamer)",
-  "template.letter": "Brief",
   "template.cv": "Lebenslauf",
+  "template.document": "Markdown",
+  "doc.preview": "Vorschau",
+  "doc.pages.one": "{count} Seite",
+  "doc.pages.other": "{count} Seiten",
 
   "dialog.newProject.desc":
     "Im Projektverzeichnis wird ein neuer Ordner angelegt.",

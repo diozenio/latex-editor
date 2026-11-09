@@ -312,8 +312,11 @@ export const es: Messages = {
   "template.article": "Artículo",
   "template.report": "Informe",
   "template.beamer": "Presentación (Beamer)",
-  "template.letter": "Carta",
   "template.cv": "Currículum",
+  "template.document": "Markdown",
+  "doc.preview": "Vista previa",
+  "doc.pages.one": "{count} página",
+  "doc.pages.other": "{count} páginas",
 
   "dialog.newProject.desc":
     "Se crea una carpeta nueva en el directorio de tus proyectos.",

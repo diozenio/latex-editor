@@ -308,8 +308,11 @@ export const en = {
   "template.article": "Article",
   "template.report": "Report",
   "template.beamer": "Presentation (Beamer)",
-  "template.letter": "Letter",
   "template.cv": "CV",
+  "template.document": "Markdown",
+  "doc.preview": "Preview",
+  "doc.pages.one": "{count} page",
+  "doc.pages.other": "{count} pages",
 
   "dialog.newProject.desc":
     "A new folder is created in your projects directory.",

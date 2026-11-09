@@ -312,8 +312,11 @@ export const it: Messages = {
   "template.article": "Articolo",
   "template.report": "Relazione",
   "template.beamer": "Presentazione (Beamer)",
-  "template.letter": "Lettera",
   "template.cv": "Curriculum",
+  "template.document": "Markdown",
+  "doc.preview": "Anteprima",
+  "doc.pages.one": "{count} pagina",
+  "doc.pages.other": "{count} pagine",
 
   "dialog.newProject.desc":
     "Viene creata una nuova cartella nella directory dei tuoi progetti.",
