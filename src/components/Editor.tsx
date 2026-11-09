@@ -40,8 +40,17 @@ import { tags as t } from "@lezer/highlight";
 import { latex, latexCompletionSource } from "codemirror-lang-latex";
 import { useEffect, useRef } from "react";
 import { createFindPanel } from "@/components/FindPanel";
+import {
+  addComment,
+  commentAnchors,
+  commentsExtension,
+  view as commentView,
+  setComments,
+} from "@/lib/commentsExt";
 import { type MessageKey, t as translate, useLanguage } from "@/lib/i18n";
 import { refCompletion, refreshRefs } from "@/lib/refs";
+import { useApp } from "@/stores/app";
+import { useComments } from "@/stores/comments";
 import { useProject } from "@/stores/project";
 
 const theme = EditorView.theme({
@@ -216,6 +225,7 @@ function extensions(
     highlightSpecialChars(),
     history(),
     foldGutter({ openText: "▾", closedText: "▸" }),
+    commentsExtension(path),
     drawSelection(),
     dropCursor(),
     EditorState.allowMultipleSelections.of(true),
@@ -253,6 +263,7 @@ function extensions(
       ...foldKeymap,
       ...completionKeymap,
       indentWithTab,
+      { key: "Mod-Alt-m", run: addComment },
     ]),
     EditorView.domEventHandlers({
       mousedown(e, view) {
@@ -264,7 +275,10 @@ function extensions(
       },
     }),
     EditorView.updateListener.of((u) => {
-      if (u.docChanged) onChange(u.state.doc.toString());
+      if (u.docChanged) {
+        onChange(u.state.doc.toString());
+        useComments.getState().reanchor(path, commentAnchors(u.state));
+      }
       if (u.selectionSet || u.docChanged)
         onLine(u.state.doc.lineAt(u.state.selection.main.head).number);
     }),
@@ -309,6 +323,7 @@ export function Editor({ path }: { path: string }) {
     const v = new EditorView({ parent: host.current! });
     view.current = v;
     return () => {
+      if (commentView.current === v) commentView.current = null;
       const entry = shown.current && states.current.get(shown.current);
       if (entry) entry.state = v.state;
       shown.current = null;
@@ -345,6 +360,9 @@ export function Editor({ path }: { path: string }) {
       v.focus();
     }
     if (v.state.doc.toString() !== doc.content) replaceDoc(v, doc.content);
+    commentView.current = v;
+    commentView.path = path;
+    useComments.getState().relocate(path, v.state.doc.toString());
   }, [path, !!doc]);
 
   useEffect(() => {
@@ -360,7 +378,38 @@ export function Editor({ path }: { path: string }) {
       return;
     entry.version = doc.version;
     if (v.state.doc.toString() !== doc.content) replaceDoc(v, doc.content);
+    useComments.getState().relocate(path, v.state.doc.toString());
   }, [doc?.version, path, doc]);
+
+  const threads = useComments((s) => s.threads);
+  const activeId = useComments((s) => s.activeId);
+  const draft = useComments((s) => s.draft);
+  const marksVisible = useApp((s) => s.ui.commentMarks);
+  useEffect(() => {
+    const v = view.current;
+    if (!v || !doc || shown.current !== path) return;
+    const target =
+      draft && draft.file === path
+        ? draft.to
+        : (threads.find((th) => th.id === activeId && th.file === path)?.to ??
+          null);
+    v.dispatch({
+      effects: setComments.of({
+        visible: marksVisible,
+        popover: target,
+        marks: threads
+          .filter((th) => th.file === path)
+          .map((th) => ({
+            id: th.id,
+            from: th.from,
+            to: th.to,
+            quote: th.quote,
+            resolved: th.resolved,
+            orphaned: !!th.orphaned,
+          })),
+      }),
+    });
+  }, [threads, activeId, draft, marksVisible, path, !!doc]);
 
   const language = useLanguage((s) => s.language);
   useEffect(() => {
