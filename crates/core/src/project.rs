@@ -140,6 +140,8 @@ fn guess_meta(dir: &Path) -> ProjectMeta {
             if let Ok(rel) = e.path().strip_prefix(dir) {
                 meta.main_file = rel.to_string_lossy().replace('\\', "/");
             }
+        } else if dir.join("main.md").is_file() {
+            meta.main_file = "main.md".into();
         }
     }
     let main = std::fs::read_to_string(dir.join(&meta.main_file)).unwrap_or_default();
@@ -331,6 +333,15 @@ mod tests {
         let names: Vec<_> = list(&ws).unwrap().into_iter().map(|p| p.name).collect();
         assert_eq!(names.len(), 2);
         assert_eq!(unique_name(&ws, "Paper"), "Paper 2");
+    }
+
+    #[test]
+    fn document_template_uses_markdown() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(tmp.path()).unwrap();
+        create(&ws, "Notes", "document").unwrap();
+        assert!(ws.root().join("Notes/main.md").exists());
+        assert_eq!(read_meta(&ws, "Notes").unwrap().main_file, "main.md");
     }
 
     #[test]

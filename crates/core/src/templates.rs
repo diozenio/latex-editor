@@ -3,11 +3,14 @@ pub const TEMPLATES: &[(&str, &str)] = &[
     ("article", "Article"),
     ("report", "Report"),
     ("beamer", "Presentation (Beamer)"),
-    ("letter", "Letter"),
     ("cv", "CV"),
+    ("document", "Markdown"),
 ];
 
 pub fn files(template: &str, title: &str) -> Vec<(&'static str, String)> {
+    if template == "document" {
+        return vec![("main.md", document(title))];
+    }
     let title = escape(title);
     match template {
         "article" => vec![
@@ -93,20 +96,6 @@ Start writing here. Cite like this~\cite{{knuth1984}}.
 
 \end{{document}}
 "))],
-        "letter" => vec![("main.tex", r"\documentclass{letter}
-\signature{Your Name}
-\address{Street \\ City}
-
-\begin{document}
-\begin{letter}{Recipient \\ Address}
-\opening{Dear Sir or Madam,}
-
-Body of the letter.
-
-\closing{Yours faithfully,}
-\end{letter}
-\end{document}
-".to_string())],
         "cv" => vec![("main.tex", r"\documentclass[11pt]{article}
 \usepackage[margin=2cm]{geometry}
 \usepackage{enumitem}
@@ -139,6 +128,47 @@ you@example.com \quad \href{https://github.com/you}{github.com/you}
 \end{{document}}
 "))],
     }
+}
+
+fn document(title: &str) -> String {
+    let title = title.replace(['\n', '\r', '"'], " ");
+    format!(
+        r#"---
+title: "{title}"
+author: "John Doe"
+date: today
+font: serif
+fontSize: 12
+spacing: 1.15
+margins: 2.5cm
+paper: a4
+---
+
+# Introduction
+
+Start writing here. Text can be **bold**, *italic*, <u>underlined</u>, ~~struck through~~ or <span style="color: #c62828">colored</span>, and have [links](https://example.com). Images go in the project and are shown with `![caption](images/photo.png)`.
+
+<span style="color: #2e7d32">[new] This sentence was added in the latest revision.</span> <span style="color: #c62828">[remove] This one is marked to be cut.</span> Any passage can <span style="color: #1565c0">change color</span>, with a hex code like `#1565c0` or a name like `green`, `orange` or `purple`.
+
+## Lists and tables
+
+- First point
+- Second point
+
+1. Step one
+2. Step two
+
+- [x] Done
+- [ ] To do
+
+| Item | Amount |
+| --- | ---: |
+| Apples | 3 |
+| Pears | 5 |
+
+> A quote stands out from the text around it.
+"#
+    )
 }
 
 fn escape(s: &str) -> String {
