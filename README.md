@@ -9,6 +9,12 @@ A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync a
   data dir). Both come ready for the project templates, so new projects compile offline. Other packages are installed
   on demand, in batches: what the sources name before the first run, then whatever a run still reports missing. Neither is ever put on your PATH, and a TeX installed on the computer is
   never used. Imported projects that bring a `.latexmkrc` compile with TeX Live the way Overleaf would.
+- **Documents without LaTeX**: the *Document* template creates a `main.md` written in plain Markdown (headings,
+  bold/italic/<u>underline</u>, `<span style="color: …">` color, lists, checklists, tables, images, links, quotes), with page setup (title, author,
+  date, font, size, spacing, margins, paper, numbered headings) in the file's front matter. Where the PDF usually is,
+  a live preview lays the document out in pages as it will print, updating as you type. It is still plain text, so
+  Git history and the AI assistant work as usual; for the PDF download QuillTex turns it into LaTeX
+  (`crates/core/src/markdown.rs`) and compiles it with the same engines.
 - **Overleaf basics**: new/template projects, import ZIP (drag a .zip onto the home screen), export ZIP, download PDF,
   file tree with drag & drop, logs with clickable errors, SyncTeX (⌘-click in editor or PDF), `\ref`/`\cite` completion.
 - **Git** via the `git` installed on your computer, so your own config, credential helpers and SSH keys apply: stage,
