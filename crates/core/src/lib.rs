@@ -4,6 +4,7 @@ pub mod error;
 pub mod files;
 pub mod gh;
 pub mod git;
+pub mod markdown;
 pub mod paths;
 pub mod project;
 pub mod synctex;
