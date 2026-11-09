@@ -402,14 +402,18 @@ export const useProject = create<ProjectState>((set, get) => ({
             [path]: { content: disk, saved: disk, version: doc.version + 1 },
           },
         });
-        texChanged ||= /\.(tex|bib)$/i.test(path);
+        texChanged ||= /\.(tex|bib)$/i.test(path) || path === p.meta.mainFile;
       } else {
         useApp.getState().toast(t("project.changedOnDisk", { path }), "error");
       }
     }
     if (
       !texChanged &&
-      fileChanges.some((x) => /\.(tex|bib|cls|sty)$/i.test(x) && !get().docs[x])
+      fileChanges.some(
+        (x) =>
+          (/\.(tex|bib|cls|sty)$/i.test(x) || x === p.meta.mainFile) &&
+          !get().docs[x],
+      )
     )
       texChanged = true;
     if (texChanged && p.meta.autoCompile) get().scheduleCompile();
@@ -432,7 +436,9 @@ export const useProject = create<ProjectState>((set, get) => ({
     if (!p) return;
     try {
       const spot = await api.synctexInverse(p.name, page, x, y);
-      if (spot) await get().openFile(spot.file, spot.line);
+      // Documents compile from generated LaTeX in the build folder; it has no editable source lines.
+      if (spot && !spot.file.startsWith(".quilltex/"))
+        await get().openFile(spot.file, spot.line);
     } catch {}
   },
 
