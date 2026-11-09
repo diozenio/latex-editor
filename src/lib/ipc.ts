@@ -276,6 +276,8 @@ export const api = {
   gitCommit: (project: string, message: string) =>
     invoke<string>("git_commit", { project, message }),
   gitLog: (project: string) => invoke<Commit[]>("git_log", { project }),
+  gitCommitPaths: (project: string, paths: string[], message: string) =>
+    invoke<string | null>("git_commit_paths", { project, paths, message }),
   gitCommitFiles: (project: string, id: string) =>
     invoke<CommitFile[]>("git_commit_files", { project, id }),
   gitCommitDiff: (project: string, id: string, path: string) =>

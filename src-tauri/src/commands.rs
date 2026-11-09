@@ -368,6 +368,18 @@ pub fn git_log(state: State<AppState>, project: String) -> CmdResult<Vec<git::Co
 }
 
 #[tauri::command]
+pub fn git_commit_paths(app: AppHandle, state: State<AppState>, project: String, paths: Vec<String>, message: String) -> CmdResult<Option<String>> {
+    let ws = state.ws();
+    let (name, email) = identity(&state, &project);
+    let _ = git::set_identity_for(&ws, &project, &name, &email);
+    let id = git::commit_paths(&ws, &project, &paths, &message).map_err(err)?;
+    if id.is_some() {
+        crate::sync::emit_status(&app, &ws, &project, None);
+    }
+    Ok(id)
+}
+
+#[tauri::command]
 pub fn git_commit_files(state: State<AppState>, project: String, id: String) -> CmdResult<Vec<git::CommitFile>> {
     git::commit_files(&state.ws(), &project, &id).map_err(err)
 }

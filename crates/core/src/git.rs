@@ -348,6 +348,30 @@ pub fn commit(ws: &Workspace, project: &str, message: &str) -> Result<String> {
     Ok(git.run(&["rev-parse", "HEAD"])?.trim().to_string())
 }
 
+pub fn commit_paths(ws: &Workspace, project: &str, paths: &[String], message: &str) -> Result<Option<String>> {
+    for p in paths {
+        ws.resolve(project, p)?;
+    }
+    let dir = ws.project_dir(project)?;
+    if !dir.join(".git").exists() || dir.join(".git/MERGE_HEAD").exists() {
+        return Ok(None);
+    }
+    let git = open(&dir)?;
+    let mut add = vec!["add", "-A", "--"];
+    add.extend(paths.iter().map(String::as_str));
+    git.run(&add)?;
+    let mut diff = vec!["diff", "--cached", "--quiet", "--"];
+    diff.extend(paths.iter().map(String::as_str));
+    if has_head(&git) && git.ok(&diff) {
+        return Ok(None);
+    }
+    let mut args = identity_args(&git);
+    args.extend(["commit", "-q", "--no-edit", "-m", message, "--"]);
+    args.extend(paths.iter().map(String::as_str));
+    git.run(&args)?;
+    Ok(Some(git.run(&["rev-parse", "HEAD"])?.trim().to_string()))
+}
+
 pub fn log(ws: &Workspace, project: &str, limit: usize) -> Result<Vec<Commit>> {
     let dir = ws.project_dir(project)?;
     let git = open(&dir)?;
@@ -636,6 +660,27 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let ws = Workspace::new(tmp.path().join("ws")).unwrap();
         (tmp, ws)
+    }
+
+    #[test]
+    fn commit_paths_commits_only_the_given_file() {
+        let (_t, ws) = setup();
+        crate::project::create(&ws, "p", "blank").unwrap();
+        init(&ws, "p", "Tester", "t@example.com").unwrap();
+        stage_all(&ws, "p").unwrap();
+        commit(&ws, "p", "init").unwrap();
+
+        crate::files::write_text(&ws, "p", "main.tex", "edited\n").unwrap();
+        crate::files::write_text(&ws, "p", ".quilltex/comments.json", "{}\n").unwrap();
+        let paths = [".quilltex/comments.json".to_string()];
+        assert!(commit_paths(&ws, "p", &paths, "add comment").unwrap().is_some());
+        assert!(commit_paths(&ws, "p", &paths, "add comment").unwrap().is_none());
+
+        let last = &log(&ws, "p", 1).unwrap()[0];
+        assert_eq!(last.summary, "add comment");
+        let files = commit_files(&ws, "p", &last.id).unwrap();
+        assert_eq!(files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec![".quilltex/comments.json"]);
+        assert!(status(&ws, "p").unwrap().files.iter().any(|f| f.path == "main.tex"));
     }
 
     #[test]

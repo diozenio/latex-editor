@@ -192,6 +192,7 @@ pub fn run() {
             commands::git_unstage,
             commands::git_discard,
             commands::git_commit,
+            commands::git_commit_paths,
             commands::git_log,
             commands::git_diff,
             commands::git_commit_files,
