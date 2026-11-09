@@ -17,6 +17,7 @@ flate2 = "1"
 wait-timeout = "0.2"
 uuid = { version = "1", features = ["v4"] }
 ureq = "3"
+pulldown-cmark = { version = "0.13", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"
