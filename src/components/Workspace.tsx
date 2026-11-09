@@ -24,12 +24,14 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { basename, mod } from "@/lib/format";
+import { countWords } from "@/lib/frontMatter";
 import { t, useT } from "@/lib/i18n";
 import { api } from "@/lib/ipc";
 import { useHint, useShortcut } from "@/lib/keybinds";
 import { useApp } from "@/stores/app";
 import { tabKind, useProject } from "@/stores/project";
 import { ChatPanel } from "./ChatPanel";
+import { DocPreview } from "./DocPreview";
 import { Editor } from "./Editor";
 import { fileIcon } from "./FileTree";
 import { downloadPdf, PdfViewer } from "./PdfViewer";
@@ -130,6 +132,7 @@ export function Workspace() {
   }, [dragging, split]);
 
   if (!project) return null;
+  const isDocument = /\.md$/i.test(project.meta.mainFile);
   const errors =
     result?.diagnostics.filter((d) => d.severity === "error").length ?? 0;
 
@@ -173,19 +176,21 @@ export function Workspace() {
         >
           <Sparkles size={14} /> {t("common.aiAssistant")}
         </button>
-        <button
-          className="btn primary"
-          onClick={() => compile()}
-          disabled={compiling}
-          title={compileHint}
-        >
-          {compiling ? (
-            <Loader2 size={14} className="spin" />
-          ) : (
-            <Play size={13} fill="currentColor" />
-          )}
-          {compiling ? t("workspace.compiling") : t("common.compile")}
-        </button>
+        {!isDocument && (
+          <button
+            className="btn primary"
+            onClick={() => compile()}
+            disabled={compiling}
+            title={compileHint}
+          >
+            {compiling ? (
+              <Loader2 size={14} className="spin" />
+            ) : (
+              <Play size={13} fill="currentColor" />
+            )}
+            {compiling ? t("workspace.compiling") : t("common.compile")}
+          </button>
+        )}
         <button
           className={`icon-btn framed${ui.commentMarks ? " active" : ""}`}
           title={
@@ -289,7 +294,7 @@ export function Workspace() {
               className="pane"
               style={{ flex: 1, pointerEvents: dragging ? "none" : undefined }}
             >
-              <PdfViewer />
+              {isDocument ? <DocPreview /> : <PdfViewer />}
             </div>
           </>
         )}
@@ -486,6 +491,7 @@ function StatusBar({ errors }: { errors: number }) {
     result?.diagnostics.filter((d) => d.severity === "warning").length ?? 0;
   const words = useMemo(() => {
     const text = active ? docs[active]?.content : "";
+    if (text && /\.md$/i.test(active ?? "")) return countWords(text);
     if (!text || !active?.endsWith(".tex")) return null;
     const body = text
       .replace(/%.*$/gm, "")
@@ -542,7 +548,9 @@ function StatusBar({ errors }: { errors: number }) {
         </button>
       )}
       {words != null && <span>{t("status.words", { count: words })}</span>}
-      {active && <span>{t("status.line", { line: cursorLine })}</span>}
+      {active && !/\.md$/i.test(active) && (
+        <span>{t("status.line", { line: cursorLine })}</span>
+      )}
       <span>
         {project?.meta.engine === "tectonic"
           ? "Tectonic"

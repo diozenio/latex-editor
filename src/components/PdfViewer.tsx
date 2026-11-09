@@ -35,14 +35,18 @@ interface PageSize {
 }
 
 export async function downloadPdf() {
-  const { project, result } = useProject.getState();
+  const { project } = useProject.getState();
   const app = useApp.getState();
   if (!project) return;
+  // Documents show a live preview instead of the PDF, so build it fresh before saving.
+  if (/\.md$/i.test(project.meta.mainFile))
+    await useProject.getState().compile();
+  const { result } = useProject.getState();
   if (!result?.pdf) {
     app.toast(t("pdf.compileFirst"), "error");
     return;
   }
-  const stem = basename(project.meta.mainFile).replace(/\.tex$/i, "");
+  const stem = basename(project.meta.mainFile).replace(/\.(tex|md)$/i, "");
   const dest = await save({
     defaultPath: `${project.name === stem ? stem : `${project.name}`}.pdf`,
     filters: [{ name: "PDF", extensions: ["pdf"] }],
