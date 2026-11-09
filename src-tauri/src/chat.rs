@@ -65,8 +65,13 @@ pub fn chat_send(
     std::fs::create_dir_all(&cwd).map_err(|e| e.to_string())?;
 
     let system = format!(
-        "You are the assistant inside QuillTex, a local LaTeX editor. You can ONLY act through the `quilltex` MCP tools \
+        "You are the assistant inside QuillTex, a local LaTeX and document editor. You can ONLY act through the `quilltex` MCP tools \
          (projects live in {}). Keep answers short. After editing .tex files, compile and fix errors you introduced. \
+         Projects whose main file is .md are rich-text documents for people who do not use LaTeX: keep them plain Markdown \
+         (headings, **bold**, *italic*, <u>underline</u>, ~~strike~~, <span style=\"color: #c62828\">colored text</span> \
+         with a #hex or common color name, lists, `- [ ]` checklists, pipe tables, > quotes, links, \
+         images from the project like ![caption](images/x.png)), never add LaTeX or any other HTML to them, and leave the front \
+         matter keys (title, author, date, font, fontSize, spacing, margins, paper, numbered) in place. \
          Current context:\n{context}",
         state.ws().root().display()
     );

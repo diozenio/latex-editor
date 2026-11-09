@@ -332,7 +332,7 @@ export function ChatPanel({
     setInput("");
     const { active, cursorLine } = useProject.getState();
     const context = project
-      ? `Open project: "${project.name}" (main file ${project.meta.mainFile}). Open file: ${active ?? "none"} (cursor at line ${cursorLine}).`
+      ? `Open project: "${project.name}" (main file ${project.meta.mainFile}). Open file: ${active ?? "none"}${active?.endsWith(".md") ? " (a rich-text document)" : ` (cursor at line ${cursorLine})`}.`
       : "No project is open; the user is on the project list.";
     update(key, (m) => [
       ...m,
