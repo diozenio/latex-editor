@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Info,
   Loader2,
+  MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -184,6 +185,15 @@ export function Workspace() {
             <Play size={13} fill="currentColor" />
           )}
           {compiling ? t("workspace.compiling") : t("common.compile")}
+        </button>
+        <button
+          className={`icon-btn framed${ui.commentMarks ? " active" : ""}`}
+          title={
+            ui.commentMarks ? t("comments.hideMarks") : t("comments.showMarks")
+          }
+          onClick={() => setUi({ commentMarks: !ui.commentMarks })}
+        >
+          <MessageSquare size={15} />
         </button>
         <button
           className={`icon-btn framed${ui.pdf ? " active" : ""}`}
