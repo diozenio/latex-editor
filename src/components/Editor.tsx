@@ -10,6 +10,7 @@ import {
   historyKeymap,
   indentWithTab,
 } from "@codemirror/commands";
+import { markdown } from "@codemirror/lang-markdown";
 import {
   bracketMatching,
   foldGutter,
@@ -47,6 +48,7 @@ import {
   view as commentView,
   setComments,
 } from "@/lib/commentsExt";
+import { htmlToMarkdown } from "@/lib/htmlToMarkdown";
 import { type MessageKey, t as translate, useLanguage } from "@/lib/i18n";
 import { refCompletion, refreshRefs } from "@/lib/refs";
 import { useApp } from "@/stores/app";
@@ -254,7 +256,9 @@ function extensions(
             activateOnTyping: true,
           }),
         ]
-      : [autocompletion()]),
+      : /\.md$/i.test(path)
+        ? [markdown(), autocompletion()]
+        : [autocompletion()]),
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,
@@ -266,6 +270,20 @@ function extensions(
       { key: "Mod-Alt-m", run: addComment },
     ]),
     EditorView.domEventHandlers({
+      paste(e, view) {
+        // Formatted text from Word, Docs or the web keeps its formatting as Markdown.
+        const html = e.clipboardData?.getData("text/html");
+        if (!/\.md$/i.test(path) || !html || /<pre|monospace/i.test(html))
+          return false;
+        const text = htmlToMarkdown(html);
+        if (!text) return false;
+        e.preventDefault();
+        view.dispatch(view.state.replaceSelection(text), {
+          scrollIntoView: true,
+          userEvent: "input.paste",
+        });
+        return true;
+      },
       mousedown(e, view) {
         if (!(e.metaKey || e.ctrlKey) || !isTex) return false;
         const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
