@@ -105,6 +105,7 @@ function enginesVersion() {
   );
   for (const file of [
     ["crates", "core", "src", "templates.rs"],
+    ["crates", "core", "src", "markdown.rs"],
     ["crates", "core", "examples", "prepare-engines.rs"],
   ]) {
     hash.update(readFileSync(join(root, ...file)));
