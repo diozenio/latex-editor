@@ -1,12 +1,12 @@
 import {
   BookOpen,
   FileText,
+  FileType,
   Github,
   GitMerge,
   Globe,
   Loader2,
   Lock,
-  Mail,
   MoreHorizontal,
   Presentation,
   ScrollText,
@@ -89,11 +89,11 @@ function useBusy() {
 }
 
 const TEMPLATE_ICONS: Record<string, JSX.Element> = {
+  document: <FileType size={18} />,
   blank: <Square size={18} />,
   article: <FileText size={18} />,
   report: <BookOpen size={18} />,
   beamer: <Presentation size={18} />,
-  letter: <Mail size={18} />,
   cv: <UserSquare size={18} />,
 };
 
@@ -102,8 +102,8 @@ const DEFAULT_TEMPLATES: [string, string][] = [
   ["article", "Article"],
   ["report", "Report"],
   ["beamer", "Presentation (Beamer)"],
-  ["letter", "Letter"],
   ["cv", "CV"],
+  ["document", "Markdown"],
 ];
 
 function templateKey(id: string): MessageKey | null {
