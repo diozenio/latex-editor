@@ -3,6 +3,9 @@ name = "quilltex-mcp"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "quilltex-mcp"
 path = "src/main.rs"
