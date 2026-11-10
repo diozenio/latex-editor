@@ -1,6 +1,6 @@
 # QuillTex
 
-A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync and a Claude Code assistant.
+A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync and an AI assistant (Claude Code or OpenRouter).
 
 - **Projects are plain folders** in `~/Documents/QuillTex/<project>` (configurable). Open them in Finder or any editor.
   Per-project settings live in `.quilltex/project.json`; build output in `.quilltex/build/` (git-ignored).
@@ -21,9 +21,13 @@ A lightweight, local-first LaTeX editor (Tauri 2 + React) with Git/GitHub sync a
   commit, branches, merge with conflict resolution, pull, push. Background fetch keeps a sync badge current (synced / ↑ to push / ↓ to pull / diverged).
 - **GitHub** via your [GitHub CLI](https://cli.github.com) (`gh`) sign-in; QuillTex stores no tokens. Publish a project as a
   new repo or clone one.
-- **AI assistant**: the side chat drives your installed Claude Code (`claude -p`) with only QuillTex's MCP tools enabled
-  (no shell/file/web tools, neutral working dir), so it can manage projects but nothing else. Optionally register the
-  same MCP server with Claude Code to use it from your terminal.
+- **AI assistant**: pick a provider in *Settings → AI*. With **Claude Code** the side chat drives your installed CLI
+  (`claude -p`) with only QuillTex's MCP tools enabled (no shell/file/web tools, neutral working dir). With
+  **OpenRouter** you paste your own API key and choose a model; the app runs the same tools in-process, and shows the
+  key's credits and clear errors (invalid key, no credits, model without tool support…). Either way it can manage
+  projects but nothing else. Optionally register the MCP server with Claude Code to use it from your terminal.
+- **AI commit**: one click in Source Control groups the pending changes into commits by scope and writes each message
+  as a plain sentence about the document, in the app's language.
 
 ## Develop
 
@@ -59,7 +63,7 @@ your git config).
 
 ```
 crates/core     shared logic: path sandbox, projects, files, zip, compile, synctex, git, gh
-crates/mcp      quilltex-mcp: MCP stdio server used by Claude Code
+crates/mcp      quilltex-mcp: QuillTex tools, as an MCP stdio server for Claude Code and a library for OpenRouter
 src-tauri       desktop app: IPC commands, watcher, sync loop, GitHub, chat, uninstall
 src             React UI
 ```
