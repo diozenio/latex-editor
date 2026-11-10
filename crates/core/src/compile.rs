@@ -256,6 +256,22 @@ pub fn clean(ws: &Workspace, name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Drops intermediate build files (aux, latexmk database, logs) but keeps the PDF so the
+/// preview stays up. Stale intermediates still point at old file names after a rename,
+/// move or delete, and make the next compile fail for no real reason.
+pub fn clean_intermediates(ws: &Workspace, name: &str) -> Result<()> {
+    let Ok(entries) = std::fs::read_dir(ws.project_dir(name)?.join(BUILD_DIR)) else { return Ok(()) };
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            std::fs::remove_dir_all(&p)?;
+        } else if p.extension().is_none_or(|x| x != "pdf") {
+            std::fs::remove_file(&p)?;
+        }
+    }
+    Ok(())
+}
+
 fn read_all(r: &mut impl std::io::Read) -> String {
     let mut buf = Vec::new();
     let _ = r.read_to_end(&mut buf);

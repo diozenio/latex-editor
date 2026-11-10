@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::{paths::validate_name, project::is_internal, Error, Result, Workspace};
+use crate::{compile, paths::validate_name, project::{self, is_internal}, Error, Result, Workspace};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -119,6 +119,13 @@ pub fn rename(ws: &Workspace, project: &str, from: &str, to: &str) -> Result<()>
         std::fs::create_dir_all(parent)?;
     }
     std::fs::rename(src, dst)?;
+    if let Ok(mut meta) = project::read_meta(ws, project) {
+        if let Some(rest) = meta.main_file.strip_prefix(from).filter(|r| r.is_empty() || r.starts_with('/')) {
+            meta.main_file = format!("{to}{rest}");
+            project::write_meta(ws, project, &meta)?;
+        }
+    }
+    let _ = compile::clean_intermediates(ws, project);
     Ok(())
 }
 
@@ -130,7 +137,9 @@ pub fn delete(ws: &Workspace, project: &str, rel: &str) -> Result<()> {
     if !p.exists() {
         return Err(Error::NotFound(rel.into()));
     }
-    crate::trash::delete(&p).map_err(|e| Error::Other(e.to_string()))
+    crate::trash::delete(&p).map_err(|e| Error::Other(e.to_string()))?;
+    let _ = compile::clean_intermediates(ws, project);
+    Ok(())
 }
 
 pub fn import_file(ws: &Workspace, project: &str, src: &Path, dest_dir: &str) -> Result<String> {
@@ -178,5 +187,24 @@ mod tests {
         assert!(write_text(&ws, "p", "../q/x.tex", "").is_err());
         assert!(write_text(&ws, "gone", "main.tex", "").is_err());
         assert!(!tmp.path().join("gone").exists());
+    }
+
+    #[test]
+    fn rename_follows_main_file_and_drops_stale_build_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(tmp.path()).unwrap();
+        crate::project::create(&ws, "p", "blank").unwrap();
+        let build = ws.project_dir("p").unwrap().join(crate::project::BUILD_DIR);
+        std::fs::create_dir_all(&build).unwrap();
+        std::fs::write(build.join("main.aux"), "").unwrap();
+        std::fs::write(build.join("main.fdb_latexmk"), "").unwrap();
+        std::fs::write(build.join("main.pdf"), "").unwrap();
+        create_dir(&ws, "p", "src").unwrap();
+        rename(&ws, "p", "main.tex", "src/main.tex").unwrap();
+        assert_eq!(crate::project::read_meta(&ws, "p").unwrap().main_file, "src/main.tex");
+        rename(&ws, "p", "src", "tex").unwrap();
+        assert_eq!(crate::project::read_meta(&ws, "p").unwrap().main_file, "tex/main.tex");
+        let left: Vec<_> = std::fs::read_dir(&build).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(left, ["main.pdf"]);
     }
 }

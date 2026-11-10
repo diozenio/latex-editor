@@ -261,6 +261,7 @@ pub fn rename(ws: &Workspace, from: &str, to: &str) -> Result<ProjectSummary> {
         return Err(Error::AlreadyExists(to.into()));
     }
     std::fs::rename(src, dst)?;
+    let _ = crate::compile::clean_intermediates(ws, to);
     summary(ws, to)
 }
 
