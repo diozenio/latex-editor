@@ -12,6 +12,8 @@ pub struct FileStatus {
     pub kind: String,
     pub staged: bool,
     pub unstaged: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orig_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -207,17 +209,18 @@ pub fn status(ws: &Workspace, project: &str) -> Result<RepoStatus> {
             let mut it = ab.split(' ').map(|n| n.trim_start_matches(['+', '-']).parse().unwrap_or(0));
             (ahead, behind) = (it.next().unwrap_or(0), it.next().unwrap_or(0));
         } else if let Some(p) = e.strip_prefix("? ") {
-            files.push(FileStatus { path: p.into(), kind: "new".into(), staged: false, unstaged: true });
+            files.push(FileStatus { path: p.into(), kind: "new".into(), staged: false, unstaged: true, orig_path: None });
         } else if let Some(rest) = e.strip_prefix("1 ") {
             let f: Vec<&str> = rest.splitn(8, ' ').collect();
             files.push(entry(f[0], f[7]));
         } else if let Some(rest) = e.strip_prefix("2 ") {
             let f: Vec<&str> = rest.splitn(9, ' ').collect();
-            files.push(entry(f[0], f[8]));
-            entries.next();
+            let mut file = entry(f[0], f[8]);
+            file.orig_path = entries.next().map(String::from);
+            files.push(file);
         } else if let Some(rest) = e.strip_prefix("u ") {
             let f: Vec<&str> = rest.splitn(10, ' ').collect();
-            files.push(FileStatus { path: f[9].into(), kind: "conflicted".into(), staged: false, unstaged: true });
+            files.push(FileStatus { path: f[9].into(), kind: "conflicted".into(), staged: false, unstaged: true, orig_path: None });
         }
     }
     files.retain(|f| !f.path.starts_with(".quilltex/build"));
@@ -258,7 +261,7 @@ fn entry(xy: &str, path: &str) -> FileStatus {
     } else {
         "modified"
     };
-    FileStatus { path: path.into(), kind: kind.into(), staged: x != b'.', unstaged: y != b'.' }
+    FileStatus { path: path.into(), kind: kind.into(), staged: x != b'.', unstaged: y != b'.', orig_path: None }
 }
 
 pub fn stage(ws: &Workspace, project: &str, paths: &[String]) -> Result<()> {
