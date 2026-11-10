@@ -8,6 +8,8 @@ import {
   ChevronRight,
   Copy,
   ExternalLink,
+  Eye,
+  EyeOff,
   Settings as Gear,
   Github,
   Keyboard,
@@ -24,6 +26,13 @@ import {
   XCircle,
 } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
+import {
+  type AiProvider,
+  aiErrorMessage,
+  aiProvider,
+  OPENROUTER_DEFAULT,
+  OPENROUTER_MODELS,
+} from "@/lib/ai";
 import { compactNumber, formatBytes } from "@/lib/format";
 import {
   LANGUAGES,
@@ -36,12 +45,14 @@ import {
 } from "@/lib/i18n";
 import { T } from "@/lib/i18n/T";
 import {
+  type AiFailure,
   api,
   type EngineEntry,
   errorMessage,
   type GithubUser,
   type Installed,
   type LoginCode,
+  type OpenRouterKeyInfo,
   type StorageUsage,
   type TexPackage,
   type UsageWindow,
@@ -89,7 +100,7 @@ export const TABS: [SettingsTab, MessageKey, JSX.Element][] = [
   ["appearance", "settings.tab.appearance", <Palette size={15} key="p" />],
   ["keybinds", "settings.tab.keybinds", <Keyboard size={15} key="k" />],
   ["github", "settings.tab.github", <Github size={15} key="h" />],
-  ["claude", "settings.tab.claude", <Sparkles size={15} key="c" />],
+  ["ai", "settings.tab.ai", <Sparkles size={15} key="c" />],
   ["latex", "settings.tab.latex", <Sigma size={15} key="l" />],
   ["uninstall", "settings.tab.uninstall", <Trash2 size={15} key="u" />],
 ];
@@ -125,7 +136,7 @@ export function SettingsDialog() {
           {tab === "appearance" && <AppearanceTab />}
           {tab === "keybinds" && <KeybindsTab />}
           {tab === "github" && <GithubTab />}
-          {tab === "claude" && <ClaudeTab />}
+          {tab === "ai" && <AiTab />}
           {tab === "latex" && <LatexTab />}
           {tab === "uninstall" && <UninstallTab />}
         </div>
@@ -908,7 +919,241 @@ function UsageSection() {
   );
 }
 
-function ClaudeTab() {
+function AiTab() {
+  const t = useT();
+  const { settings, saveSettings } = useApp();
+  if (!settings) return null;
+  const provider = aiProvider(settings);
+  const options: [AiProvider, string, string][] = [
+    ["claude", "Claude Code", t("settings.ai.claudeDesc")],
+    ["openrouter", "OpenRouter", t("settings.ai.openrouterDesc")],
+  ];
+  return (
+    <Page title={t("settings.tab.ai")}>
+      <Section
+        title={t("settings.ai.provider")}
+        description={t("settings.ai.providerDesc")}
+      >
+        <Rows>
+          {options.map(([id, name, desc]) => (
+            <Row key={id} title={name} description={desc}>
+              {provider === id ? (
+                <CheckCircle2 size={16} style={{ color: "var(--green)" }} />
+              ) : (
+                <button
+                  className="btn sm"
+                  onClick={() => void saveSettings({ aiProvider: id })}
+                >
+                  {t("settings.ai.use")}
+                </button>
+              )}
+            </Row>
+          ))}
+        </Rows>
+      </Section>
+      {provider === "openrouter" ? <OpenRouterSection /> : <ClaudeSections />}
+    </Page>
+  );
+}
+
+function money(n: number) {
+  return `$${n.toFixed(n > 0 && n < 1 ? 4 : 2)}`;
+}
+
+function OpenRouterSection() {
+  const t = useT();
+  const { settings, saveSettings } = useApp();
+  const [key, setKey] = useState(settings?.openrouterKey ?? "");
+  const [reveal, setReveal] = useState(false);
+  const [info, setInfo] = useState<OpenRouterKeyInfo | null>(null);
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const saved = settings?.openrouterKey ?? "";
+  const model = settings?.openrouterModel || OPENROUTER_DEFAULT;
+  const listed = OPENROUTER_MODELS.some(([id]) => id === model);
+  const [custom, setCustom] = useState(!listed);
+
+  const check = async (value: string) => {
+    setInfo(null);
+    setError("");
+    if (!value.trim()) return;
+    setChecking(true);
+    try {
+      setInfo(await api.openrouterKeyInfo(value));
+    } catch (e) {
+      const f = e as AiFailure;
+      setError(f?.code ? aiErrorMessage(f.code, f.detail) : errorMessage(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    void check(saved);
+  }, []);
+
+  const commitKey = async () => {
+    const value = key.trim();
+    if (value === saved) return;
+    await saveSettings({ openrouterKey: value });
+    await check(value);
+  };
+
+  return (
+    <>
+      <Section
+        title="OpenRouter"
+        actions={
+          <button
+            className="btn sm"
+            onClick={() => openUrl("https://openrouter.ai/settings/keys")}
+          >
+            <ExternalLink size={13} /> {t("settings.ai.getKey")}
+          </button>
+        }
+      >
+        <Rows>
+          <Row
+            title={t("settings.ai.apiKey")}
+            description={t("settings.ai.apiKeyDesc")}
+          >
+            <div className="row" style={{ gap: 4 }}>
+              <input
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                type={reveal ? "text" : "password"}
+                className="input mono"
+                style={{ width: 220 }}
+                placeholder="sk-or-v1-…"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                onBlur={() => void commitKey()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void commitKey();
+                }}
+              />
+              <button
+                className="btn sm icon"
+                title={
+                  reveal ? t("settings.ai.hideKey") : t("settings.ai.showKey")
+                }
+                onClick={() => setReveal(!reveal)}
+              >
+                {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
+          </Row>
+          <Row
+            title={t("settings.ai.model")}
+            description={t("settings.ai.modelDesc")}
+          >
+            <Select
+              width={200}
+              value={custom ? "__custom" : model}
+              options={[
+                ...OPENROUTER_MODELS.map(([id, label]) => ({
+                  value: id,
+                  label,
+                })),
+                { value: "__custom", label: t("settings.ai.customModel") },
+              ]}
+              onChange={(v) => {
+                setCustom(v === "__custom");
+                if (v !== "__custom") void saveSettings({ openrouterModel: v });
+              }}
+            />
+          </Row>
+          {custom && (
+            <Row
+              title={t("settings.ai.customModelId")}
+              description={t("settings.ai.customModelDesc")}
+            >
+              <input
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                className="input mono"
+                style={{ width: 220 }}
+                placeholder="provider/model"
+                defaultValue={listed ? "" : model}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v) void saveSettings({ openrouterModel: v });
+                }}
+              />
+            </Row>
+          )}
+        </Rows>
+      </Section>
+      {saved && (
+        <Section
+          title={t("settings.ai.account")}
+          actions={
+            <RefreshButton loading={checking} onClick={() => check(saved)} />
+          }
+        >
+          <Rows>
+            {error ? (
+              <Row title={t("settings.ai.keyProblem")} description={error}>
+                <StatusIcon ok={false} />
+              </Row>
+            ) : info ? (
+              <>
+                <Row
+                  title={t("settings.ai.keyValid")}
+                  description={info.label || undefined}
+                >
+                  <StatusIcon ok />
+                </Row>
+                {info.credits !== null && (
+                  <Row
+                    title={t("settings.ai.credits")}
+                    description={
+                      info.credits <= 0 ? t("settings.ai.noCredits") : undefined
+                    }
+                  >
+                    <strong
+                      style={{
+                        color: info.credits <= 0 ? "var(--red)" : undefined,
+                      }}
+                    >
+                      {money(info.credits)}
+                    </strong>
+                  </Row>
+                )}
+                <Row
+                  title={t("settings.ai.keyUsage")}
+                  description={
+                    info.limit !== null
+                      ? t("settings.ai.keyLimit", {
+                          limit: money(info.limit),
+                          left: money(info.limitRemaining ?? 0),
+                        })
+                      : info.isFreeTier
+                        ? t("settings.ai.freeTier")
+                        : undefined
+                  }
+                >
+                  <span className="mono">{money(info.usage)}</span>
+                </Row>
+              </>
+            ) : (
+              <Row title={t("settings.ai.checking")}>
+                <Loader2 size={14} className="spin" />
+              </Row>
+            )}
+          </Rows>
+        </Section>
+      )}
+      <Note>{t("settings.ai.openrouterNote")}</Note>
+    </>
+  );
+}
+
+function ClaudeSections() {
   const t = useT();
   const { info, settings, saveSettings, refreshInfo, toast } = useApp();
   const [busy, setBusy] = useState(false);
@@ -932,7 +1177,7 @@ function ClaudeTab() {
     }
   };
   return (
-    <Page title="Claude Code">
+    <>
       <Section title={t("settings.claude.cli")}>
         <Rows>
           <Row
@@ -989,7 +1234,7 @@ function ClaudeTab() {
       </Section>
       {info?.claude && <UsageSection />}
       <Note>{t("settings.claude.note")}</Note>
-    </Page>
+    </>
   );
 }
 

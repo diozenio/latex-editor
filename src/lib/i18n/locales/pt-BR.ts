@@ -225,6 +225,15 @@ export const ptBR: Messages = {
   "git.init": "Inicializar repositório",
   "git.repoCreated": "Repositório criado",
   "git.committed": "Commit feito",
+  "git.aiCommit": "Commit com IA",
+  "git.aiCommitHint":
+    "A IA agrupa as alterações em commits e escreve as mensagens",
+  "git.aiCommitSetup":
+    "Configure um provedor de IA nas configurações para commitar com IA",
+  "git.aiCommitting": "Analisando alterações…",
+  "git.aiCommittedOne": "Commit feito: “{message}”",
+  "git.aiCommitted.one": "{count} commit criado",
+  "git.aiCommitted.other": "{count} commits criados",
   "git.switchBranch": "Trocar de branch",
   "git.remote": "Remoto",
   "git.deleteBranch": "Excluir {name}",
@@ -383,6 +392,9 @@ export const ptBR: Messages = {
   "chat.notFoundBody":
     "O assistente usa o Claude Code instalado no seu computador. Instale-o, entre uma vez com {cmd} e reabra este painel.",
   "chat.openSettings": "Abrir configurações",
+  "chat.noKey": "Adicione sua chave do OpenRouter",
+  "chat.noKeyBody":
+    "O assistente está configurado para usar o OpenRouter. Cole sua chave de API nas configurações de IA para começar.",
   "chat.placeholderProject": "Pergunte sobre “{name}”…",
   "chat.placeholder": "Pergunte qualquer coisa sobre seus projetos…",
   "chat.contextProject": "Contexto: {name}",
@@ -465,7 +477,7 @@ export const ptBR: Messages = {
   "settings.tab.appearance": "Aparência",
   "settings.tab.keybinds": "Teclado",
   "settings.tab.github": "GitHub",
-  "settings.tab.claude": "Claude Code",
+  "settings.tab.ai": "IA",
   "settings.tab.latex": "LaTeX e pacotes",
   "settings.tab.uninstall": "Desinstalar",
 
@@ -566,6 +578,66 @@ export const ptBR: Messages = {
   "settings.claude.mcpAdded": "O QuillTex agora está disponível no Claude Code",
   "settings.claude.note":
     "O assistente só recebe as ferramentas do QuillTex (projetos, arquivos, compilação, git). As ferramentas de shell, sistema de arquivos e web ficam desativadas, e ele roda a partir de uma pasta vazia, então não pode ler nem alterar nada fora dos seus projetos.",
+  "settings.ai.provider": "Provedor",
+  "settings.ai.providerDesc":
+    "Escolha como o assistente se conecta a um modelo de IA.",
+  "settings.ai.claudeDesc":
+    "Usa o Claude Code CLI instalado neste computador e a sua assinatura do Claude.",
+  "settings.ai.openrouterDesc":
+    "Usa a sua própria chave do OpenRouter, com vários modelos de diferentes empresas, pago por uso.",
+  "settings.ai.use": "Usar",
+  "settings.ai.getKey": "Criar chave",
+  "settings.ai.apiKey": "Chave de API",
+  "settings.ai.apiKeyDesc": "Fica salva só neste computador.",
+  "settings.ai.showKey": "Mostrar chave",
+  "settings.ai.hideKey": "Ocultar chave",
+  "settings.ai.model": "Modelo",
+  "settings.ai.modelDesc":
+    "Usado pelo assistente e nos commits com IA. Também dá para trocar no chat.",
+  "settings.ai.customModel": "Outro modelo…",
+  "settings.ai.customModelId": "ID do modelo",
+  "settings.ai.customModelDesc":
+    "Qualquer ID de modelo do OpenRouter que suporte chamadas de ferramentas.",
+  "settings.ai.account": "Conta",
+  "settings.ai.keyProblem": "A chave não está funcionando",
+  "settings.ai.keyValid": "Chave válida",
+  "settings.ai.credits": "Créditos restantes",
+  "settings.ai.noCredits":
+    "Adicione créditos no OpenRouter para continuar usando modelos pagos.",
+  "settings.ai.keyUsage": "Gasto com esta chave",
+  "settings.ai.keyLimit": "Limite da chave {limit} · restam {left}",
+  "settings.ai.freeTier": "Plano gratuito: só modelos gratuitos funcionam",
+  "settings.ai.checking": "Verificando a chave…",
+  "settings.ai.openrouterNote":
+    "As requisições vão direto deste computador para o OpenRouter. O assistente só tem as ferramentas do QuillTex (projetos, arquivos, compilação, git), então não consegue ler nem alterar nada fora dos seus projetos.",
+
+  "ai.error.noKey":
+    "Adicione sua chave de API do OpenRouter em Configurações → IA.",
+  "ai.error.invalidKey":
+    "O OpenRouter recusou a chave de API. Confira em Configurações → IA.",
+  "ai.error.noCredits":
+    "Sua conta do OpenRouter está sem créditos. Adicione créditos em openrouter.ai ou escolha um modelo gratuito.",
+  "ai.error.forbidden":
+    "O OpenRouter recusou a requisição (a chave pode estar desativada ou o conteúdo foi sinalizado).",
+  "ai.error.modelNotFound":
+    "Esse modelo não existe no OpenRouter. Escolha outro em Configurações → IA.",
+  "ai.error.noTools":
+    "Esse modelo não usa ferramentas, que o assistente precisa. Escolha outro modelo.",
+  "ai.error.contextTooLong":
+    "A conversa ficou longa demais para esse modelo. Comece um novo chat.",
+  "ai.error.rateLimited":
+    "Muitas requisições agora. Espere um pouco e tente de novo.",
+  "ai.error.unavailable":
+    "O provedor do modelo está indisponível agora. Tente de novo ou escolha outro modelo.",
+  "ai.error.timeout": "A IA demorou demais para responder. Tente de novo.",
+  "ai.error.network":
+    "Não foi possível acessar o OpenRouter. Verifique sua conexão com a internet.",
+  "ai.error.badRequest": "O OpenRouter não conseguiu processar a requisição.",
+  "ai.error.server":
+    "O OpenRouter teve um problema. Tente de novo em instantes.",
+  "ai.error.tooManySteps":
+    "Parou depois de passos demais. Peça de novo para continuar.",
+  "ai.error.badResponse": "A IA devolveu uma resposta vazia. Tente de novo.",
 
   "settings.about.title": "Sobre",
   "settings.about.checking": "Verificando atualizações…",

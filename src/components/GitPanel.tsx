@@ -15,12 +15,14 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { aiErrorMessage, aiReady } from "@/lib/ai";
 import { basename, timeAgo } from "@/lib/format";
-import { t, useT } from "@/lib/i18n";
-import { api, type Branch, type Commit, type FileStatus, type MergeOutcome } from "@/lib/ipc";
+import { getLanguage, LANGUAGES, t, useT } from "@/lib/i18n";
+import { type AiFailure, api, type Branch, type Commit, type FileStatus, type MergeOutcome } from "@/lib/ipc";
 import { matches, useShortcut } from "@/lib/keybinds";
 import { useApp } from "@/stores/app";
 import { useProject } from "@/stores/project";
@@ -113,6 +115,20 @@ export function GitPanel() {
       t("git.committed"),
     );
   };
+
+  const ready = aiReady(app.settings, app.info);
+  const autoCommit = () =>
+    act("ai-commit", async () => {
+      await useProject.getState().saveAll();
+      const language = LANGUAGES.find((l) => l.id === getLanguage())?.name ?? "English";
+      const made = await api.aiAutoCommit(name, language).catch((e: AiFailure) => {
+        throw aiErrorMessage(e.code, e.detail);
+      });
+      app.toast(
+        made.length === 1 ? t("git.aiCommittedOne", { message: made[0].message }) : t("git.aiCommitted", { count: made.length }),
+        "success",
+      );
+    });
 
   const branchItems: MenuEntry[] = [
     { heading: t("git.switchBranch") },
@@ -251,8 +267,22 @@ export function GitPanel() {
         />
         <div className="row">
           <span className="ctx">
-            {staged.length ? t("git.stagedCount", { count: staged.length }) : git.files.length ? t("git.allWillCommit") : t("git.noChanges")}
+            {busy === "ai-commit"
+              ? t("git.aiCommitting")
+              : staged.length
+                ? t("git.stagedCount", { count: staged.length })
+                : git.files.length
+                  ? t("git.allWillCommit")
+                  : t("git.noChanges")}
           </span>
+          <button
+            className="btn sm"
+            title={ready ? t("git.aiCommitHint") : t("git.aiCommitSetup")}
+            disabled={!ready || !git.files.length || !!busy || conflicted.length > 0}
+            onClick={autoCommit}
+          >
+            {busy === "ai-commit" ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />} {t("git.aiCommit")}
+          </button>
           <button className="btn sm primary" disabled={!message.trim() || !git.files.length || !!busy || conflicted.length > 0} onClick={commit}>
             {busy === "commit" ? <Loader2 size={13} className="spin" /> : <Check size={13} />} {t("git.commit")}
           </button>

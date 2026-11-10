@@ -93,6 +93,7 @@ export interface FileStatus {
     | "conflicted";
   staged: boolean;
   unstaged: boolean;
+  origPath?: string;
 }
 
 export interface RepoStatus {
@@ -150,6 +151,30 @@ export interface Settings {
   editorFontSize: number;
   theme: string;
   chatModel: string;
+  aiProvider: "claude" | "openrouter";
+  openrouterKey: string;
+  openrouterModel: string;
+}
+
+export interface OpenRouterKeyInfo {
+  label: string;
+  usage: number;
+  limit: number | null;
+  limitRemaining: number | null;
+  isFreeTier: boolean;
+  credits: number | null;
+}
+
+/** Rejection of AI commands that explain their failure with a code. */
+export interface AiFailure {
+  code: string;
+  detail: string;
+}
+
+export interface AutoCommit {
+  id: string;
+  message: string;
+  files: string[];
 }
 
 export interface AppInfo {
@@ -337,6 +362,10 @@ export const api = {
   clearTectonicCache: () => invoke<void>("clear_tectonic_cache"),
   removeTexPackage: (name: string) =>
     invoke<void>("remove_tex_package", { name }),
+  openrouterKeyInfo: (key: string) =>
+    invoke<OpenRouterKeyInfo>("openrouter_key_info", { key }),
+  aiAutoCommit: (project: string, language: string) =>
+    invoke<AutoCommit[]>("ai_auto_commit", { project, language }),
   chatLoad: <T>(key: string) => invoke<T | null>("chat_load", { key }),
   chatSave: (key: string, data: unknown) =>
     invoke<void>("chat_save", { key, data }),

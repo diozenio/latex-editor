@@ -6,6 +6,7 @@ import {
   Check,
   Copy,
   FilePlus,
+  KeyRound,
   Loader2,
   Plus,
   Sparkles,
@@ -17,6 +18,14 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
+import {
+  aiErrorMessage,
+  aiProvider,
+  aiReady,
+  CLAUDE_MODELS,
+  OPENROUTER_DEFAULT,
+  OPENROUTER_MODELS,
+} from "@/lib/ai";
 import { hasKey, type MessageKey, useT } from "@/lib/i18n";
 import { T } from "@/lib/i18n/T";
 import { api, errorMessage } from "@/lib/ipc";
@@ -206,42 +215,37 @@ function ensureListeners() {
   void listen<{ chatId: string; event: unknown }>("chat-event", (e) =>
     handleEvent(e.payload.chatId, e.payload.event),
   );
-  void listen<{ chatId: string; ok: boolean; error: string | null }>(
-    "chat-done",
-    (e) => {
-      const { chatId, error } = e.payload;
-      const key = chatId;
-      const s = useChats.getState();
-      s.setRunning(key, false);
-      streams.delete(chatId);
-      if (error)
-        update(key, (msgs) =>
-          withLastAssistant(msgs, (m) =>
-            appendText(m, `\n\n⚠️ ${error.slice(0, 600)}`),
-          ),
-        );
+  void listen<{
+    chatId: string;
+    ok: boolean;
+    error: string | null;
+    code: string | null;
+  }>("chat-done", (e) => {
+    const { chatId, code } = e.payload;
+    const error = aiErrorMessage(code, e.payload.error);
+    const key = chatId;
+    const s = useChats.getState();
+    s.setRunning(key, false);
+    streams.delete(chatId);
+    if (error)
       update(key, (msgs) =>
-        msgs.map((m) => ({
-          ...m,
-          parts: m.parts.map((p) =>
-            p.kind === "tool" && p.status === "running"
-              ? { ...p, status: "done" }
-              : p,
-          ),
-        })),
+        withLastAssistant(msgs, (m) =>
+          appendText(m, `\n\n⚠️ ${error.slice(0, 600)}`),
+        ),
       );
-      void api.chatSave(key, useChats.getState().get(key));
-    },
-  );
+    update(key, (msgs) =>
+      msgs.map((m) => ({
+        ...m,
+        parts: m.parts.map((p) =>
+          p.kind === "tool" && p.status === "running"
+            ? { ...p, status: "done" }
+            : p,
+        ),
+      })),
+    );
+    void api.chatSave(key, useChats.getState().get(key));
+  });
 }
-
-const MODELS: [string, string][] = [
-  ["", "chat.modelDefault"],
-  ["claude-fable-5-1", "Fable 5.1"],
-  ["claude-opus-5-5", "Opus 5.5"],
-  ["claude-sonnet-5-5", "Sonnet 5.5"],
-  ["claude-haiku-5-5", "Haiku 5.5"],
-];
 
 const SUGGESTIONS: {
   icon: ReactNode;
@@ -299,8 +303,15 @@ export function ChatPanel({
   const toggle = useApp((s) => s.toggle);
   const info = useApp((s) => s.info);
   const setUi = useApp((s) => s.setUi);
-  const model = useApp((s) => s.settings?.chatModel ?? "");
+  const settings = useApp((s) => s.settings);
   const saveSettings = useApp((s) => s.saveSettings);
+  const provider = aiProvider(settings);
+  const ready = aiReady(settings, info);
+  const openrouter = provider === "openrouter";
+  const model = openrouter
+    ? settings?.openrouterModel || OPENROUTER_DEFAULT
+    : (settings?.chatModel ?? "");
+  const models = openrouter ? OPENROUTER_MODELS : CLAUDE_MODELS;
   const project = useProject((s) => s.project);
   const key = project?.meta.id ? `project-${project.meta.id}` : "global";
   const chat = useChats((s) => s.chats[key]) ?? {
@@ -385,19 +396,23 @@ export function ChatPanel({
         </button>
       </div>
       <div className="chat-body" ref={body}>
-        {!info?.claude ? (
+        {!ready ? (
           <div className="empty">
             <div className="empty-icon">
-              <Terminal size={20} />
+              {openrouter ? <KeyRound size={20} /> : <Terminal size={20} />}
             </div>
-            <h3>{t("chat.notFound")}</h3>
+            <h3>{openrouter ? t("chat.noKey") : t("chat.notFound")}</h3>
             <p>
-              <T k="chat.notFoundBody" values={{ cmd: <code>claude</code> }} />
+              {openrouter ? (
+                t("chat.noKeyBody")
+              ) : (
+                <T
+                  k="chat.notFoundBody"
+                  values={{ cmd: <code>claude</code> }}
+                />
+              )}
             </p>
-            <button
-              className="btn"
-              onClick={() => setUi({ settings: "claude" })}
-            >
+            <button className="btn" onClick={() => setUi({ settings: "ai" })}>
               {t("chat.openSettings")}
             </button>
           </div>
@@ -455,7 +470,7 @@ export function ChatPanel({
                 void send();
               }
             }}
-            disabled={!info?.claude}
+            disabled={!ready}
           />
           <div className="row">
             <span className="ctx">
@@ -468,14 +483,18 @@ export function ChatPanel({
               title={t("chat.model")}
               value={model}
               disabled={running}
-              options={(MODELS.some(([id]) => id === model)
-                ? MODELS
-                : [...MODELS, [model, model]]
+              options={(models.some(([id]) => id === model)
+                ? models
+                : [...models, [model, model]]
               ).map(([id, label]) => ({
                 value: id,
                 label: hasKey(label) ? t(label as MessageKey) : label,
               }))}
-              onChange={(v) => void saveSettings({ chatModel: v })}
+              onChange={(v) =>
+                void saveSettings(
+                  openrouter ? { openrouterModel: v } : { chatModel: v },
+                )
+              }
             />
             {running ? (
               <button

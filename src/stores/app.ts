@@ -54,7 +54,7 @@ export type SettingsTab =
   | "appearance"
   | "keybinds"
   | "github"
-  | "claude"
+  | "ai"
   | "latex"
   | "uninstall";
 

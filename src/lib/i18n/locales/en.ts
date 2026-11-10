@@ -222,6 +222,14 @@ export const en = {
   "git.init": "Initialize repository",
   "git.repoCreated": "Repository created",
   "git.committed": "Committed",
+  "git.aiCommit": "AI commit",
+  "git.aiCommitHint":
+    "Let the AI group the changes into commits and write the messages",
+  "git.aiCommitSetup": "Set up an AI provider in Settings to commit with AI",
+  "git.aiCommitting": "Analyzing changes…",
+  "git.aiCommittedOne": "Committed “{message}”",
+  "git.aiCommitted.one": "Created {count} commit",
+  "git.aiCommitted.other": "Created {count} commits",
   "git.switchBranch": "Switch branch",
   "git.remote": "Remote",
   "git.deleteBranch": "Delete {name}",
@@ -377,6 +385,9 @@ export const en = {
   "chat.notFoundBody":
     "The assistant runs your local Claude Code. Install it, sign in once with {cmd}, then reopen this panel.",
   "chat.openSettings": "Open settings",
+  "chat.noKey": "Add your OpenRouter key",
+  "chat.noKeyBody":
+    "The assistant is set to use OpenRouter. Paste your API key in the AI settings to start chatting.",
   "chat.placeholderProject": "Ask about “{name}”…",
   "chat.placeholder": "Ask anything about your projects…",
   "chat.contextProject": "Context: {name}",
@@ -459,7 +470,7 @@ export const en = {
   "settings.tab.appearance": "Appearance",
   "settings.tab.keybinds": "Keyboard",
   "settings.tab.github": "GitHub",
-  "settings.tab.claude": "Claude Code",
+  "settings.tab.ai": "AI",
   "settings.tab.latex": "LaTeX & Packages",
   "settings.tab.uninstall": "Uninstall",
 
@@ -560,6 +571,64 @@ export const en = {
   "settings.claude.mcpAdded": "QuillTex is now available in Claude Code",
   "settings.claude.note":
     "The assistant only gets QuillTex’s tools (projects, files, compile, git). Shell, file system and web tools are disabled, and it runs from an empty folder, so it can’t read or change anything outside your projects.",
+  "settings.ai.provider": "Provider",
+  "settings.ai.providerDesc":
+    "Choose how the assistant connects to an AI model.",
+  "settings.ai.claudeDesc":
+    "Uses the Claude Code CLI installed on this computer and your Claude subscription.",
+  "settings.ai.openrouterDesc":
+    "Uses your own OpenRouter API key, with many models from different labs, paid per use.",
+  "settings.ai.use": "Use",
+  "settings.ai.getKey": "Get a key",
+  "settings.ai.apiKey": "API key",
+  "settings.ai.apiKeyDesc": "Saved only on this computer.",
+  "settings.ai.showKey": "Show key",
+  "settings.ai.hideKey": "Hide key",
+  "settings.ai.model": "Model",
+  "settings.ai.modelDesc":
+    "Used by the assistant and for AI commits. You can also switch it in the chat.",
+  "settings.ai.customModel": "Other model…",
+  "settings.ai.customModelId": "Model ID",
+  "settings.ai.customModelDesc":
+    "Any OpenRouter model ID that supports tool calling.",
+  "settings.ai.account": "Account",
+  "settings.ai.keyProblem": "The key isn’t working",
+  "settings.ai.keyValid": "Key is valid",
+  "settings.ai.credits": "Credits left",
+  "settings.ai.noCredits":
+    "Add credits on OpenRouter to keep using paid models.",
+  "settings.ai.keyUsage": "Spent with this key",
+  "settings.ai.keyLimit": "Key limit {limit} · {left} left",
+  "settings.ai.freeTier": "Free tier: only free models work",
+  "settings.ai.checking": "Checking the key…",
+  "settings.ai.openrouterNote":
+    "Requests go straight from this computer to OpenRouter. The assistant only gets QuillTex’s tools (projects, files, compile, git), so it can’t read or change anything outside your projects.",
+
+  "ai.error.noKey": "Add your OpenRouter API key in Settings → AI.",
+  "ai.error.invalidKey":
+    "OpenRouter rejected the API key. Check it in Settings → AI.",
+  "ai.error.noCredits":
+    "Your OpenRouter account is out of credits. Add credits at openrouter.ai or pick a free model.",
+  "ai.error.forbidden":
+    "OpenRouter refused the request (the key may be disabled or the content was flagged).",
+  "ai.error.modelNotFound":
+    "This model doesn’t exist on OpenRouter. Pick another one in Settings → AI.",
+  "ai.error.noTools":
+    "This model can’t use tools, which the assistant needs. Pick another model.",
+  "ai.error.contextTooLong":
+    "The conversation is too long for this model. Start a new chat.",
+  "ai.error.rateLimited":
+    "Too many requests right now. Wait a moment and try again.",
+  "ai.error.unavailable":
+    "The model’s provider is unavailable right now. Try again or pick another model.",
+  "ai.error.timeout": "The AI took too long to answer. Try again.",
+  "ai.error.network":
+    "Couldn’t reach OpenRouter. Check your internet connection.",
+  "ai.error.badRequest": "OpenRouter couldn’t process the request.",
+  "ai.error.server": "OpenRouter had a problem. Try again in a moment.",
+  "ai.error.tooManySteps":
+    "Stopped after too many steps. Ask again to continue.",
+  "ai.error.badResponse": "The AI returned an empty answer. Try again.",
 
   "settings.about.title": "About",
   "settings.about.checking": "Checking for updates…",
