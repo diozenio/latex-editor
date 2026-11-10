@@ -34,6 +34,9 @@ pub struct Settings {
     pub editor_font_size: u32,
     pub theme: String,
     pub chat_model: String,
+    pub ai_provider: String,
+    pub openrouter_key: String,
+    pub openrouter_model: String,
 }
 
 impl Default for Settings {
@@ -49,6 +52,9 @@ impl Default for Settings {
             editor_font_size: 13,
             theme: "system".into(),
             chat_model: String::new(),
+            ai_provider: "claude".into(),
+            openrouter_key: String::new(),
+            openrouter_model: String::new(),
         }
     }
 }

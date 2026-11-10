@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
@@ -15,6 +16,10 @@ const DISALLOWED: &str = "Bash Edit Write MultiEdit NotebookEdit Read Glob Grep 
 #[derive(Default)]
 pub struct ChatProcesses(Mutex<HashMap<String, Arc<Mutex<Child>>>>);
 
+/// Cancel flags of chats running in-process (OpenRouter).
+#[derive(Default)]
+pub struct ChatCancels(Mutex<HashMap<String, Arc<AtomicBool>>>);
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ChatEvent {
@@ -28,6 +33,7 @@ struct ChatDone {
     chat_id: String,
     ok: bool,
     error: Option<String>,
+    code: Option<String>,
 }
 
 pub(crate) fn claude_bin(state: &AppState) -> CmdResult<std::path::PathBuf> {
@@ -46,6 +52,20 @@ fn write_mcp_config(state: &AppState) -> CmdResult<std::path::PathBuf> {
     Ok(path)
 }
 
+fn system_prompt(state: &AppState, context: &str) -> String {
+    format!(
+        "You are the assistant inside QuillTex, a local LaTeX and document editor. You can ONLY act through the `quilltex` tools \
+         (projects live in {}). Keep answers short. After editing .tex files, compile and fix errors you introduced. \
+         Projects whose main file is .md are rich-text documents for people who do not use LaTeX: keep them plain Markdown \
+         (headings, **bold**, *italic*, <u>underline</u>, ~~strike~~, <span style=\"color: #c62828\">colored text</span> \
+         with a #hex or common color name, lists, `- [ ]` checklists, pipe tables, > quotes, links, \
+         images from the project like ![caption](images/x.png)), never add LaTeX or any other HTML to them, and leave the front \
+         matter keys (title, author, date, font, fontSize, spacing, margins, paper, numbered) in place. \
+         Current context:\n{context}",
+        state.ws().root().display()
+    )
+}
+
 #[tauri::command]
 pub fn chat_send(
     app: AppHandle,
@@ -56,25 +76,58 @@ pub fn chat_send(
     session_id: Option<String>,
     context: String,
 ) -> CmdResult<()> {
-    let bin = claude_bin(&state)?;
+    if state.settings().ai_provider == "openrouter" {
+        return send_openrouter(app, chat_id, message, session_id, context);
+    }
+    send_claude(app, &state, &procs, chat_id, message, session_id, context)
+}
+
+fn send_openrouter(
+    app: AppHandle,
+    chat_id: String,
+    message: String,
+    session_id: Option<String>,
+    context: String,
+) -> CmdResult<()> {
+    let cancel = Arc::new(AtomicBool::new(false));
+    tauri::Manager::state::<ChatCancels>(&app).0.lock().unwrap().insert(chat_id.clone(), cancel.clone());
+    std::thread::spawn(move || {
+        let state = tauri::Manager::state::<AppState>(&app);
+        let system = system_prompt(&state, &context);
+        let emit = |event: Value| {
+            let _ = app.emit("chat-event", ChatEvent { chat_id: chat_id.clone(), event });
+        };
+        let res = crate::openrouter::run_chat(&state, &message, session_id, &system, &cancel, &emit);
+        let done = match res {
+            Ok(()) => ChatDone { chat_id: chat_id.clone(), ok: true, error: None, code: None },
+            Err(e) if e.code == "cancelled" => ChatDone { chat_id: chat_id.clone(), ok: false, error: None, code: None },
+            Err(e) => ChatDone { chat_id: chat_id.clone(), ok: false, error: Some(e.to_string()), code: Some(e.code.into()) },
+        };
+        let _ = app.emit("chat-done", done);
+        if let Some(cancels) = tauri::Manager::try_state::<ChatCancels>(&app) {
+            cancels.0.lock().unwrap().remove(&chat_id);
+        }
+    });
+    Ok(())
+}
+
+fn send_claude(
+    app: AppHandle,
+    state: &AppState,
+    procs: &ChatProcesses,
+    chat_id: String,
+    message: String,
+    session_id: Option<String>,
+    context: String,
+) -> CmdResult<()> {
+    let bin = claude_bin(state)?;
     if !state.mcp_binary().is_file() {
         return Err("quilltex-mcp sidecar is missing; run `npm run sidecars`.".into());
     }
-    let mcp = write_mcp_config(&state)?;
+    let mcp = write_mcp_config(state)?;
     let cwd = state.config_dir.join("chat-workspace");
     std::fs::create_dir_all(&cwd).map_err(|e| e.to_string())?;
-
-    let system = format!(
-        "You are the assistant inside QuillTex, a local LaTeX and document editor. You can ONLY act through the `quilltex` MCP tools \
-         (projects live in {}). Keep answers short. After editing .tex files, compile and fix errors you introduced. \
-         Projects whose main file is .md are rich-text documents for people who do not use LaTeX: keep them plain Markdown \
-         (headings, **bold**, *italic*, <u>underline</u>, ~~strike~~, <span style=\"color: #c62828\">colored text</span> \
-         with a #hex or common color name, lists, `- [ ]` checklists, pipe tables, > quotes, links, \
-         images from the project like ![caption](images/x.png)), never add LaTeX or any other HTML to them, and leave the front \
-         matter keys (title, author, date, font, fontSize, spacing, margins, paper, numbered) in place. \
-         Current context:\n{context}",
-        state.ws().root().display()
-    );
+    let system = system_prompt(state, &context);
     let mut cmd = Command::new(&bin);
     cmd.args(["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"])
         .arg("--mcp-config")
@@ -86,7 +139,8 @@ pub fn chat_send(
     if !model.is_empty() {
         cmd.args(["--model", &model]);
     }
-    if let Some(sid) = session_id.filter(|s| !s.is_empty()) {
+    // Sessions started with OpenRouter ("or-…") are unknown to Claude Code.
+    if let Some(sid) = session_id.filter(|s| !s.is_empty() && !s.starts_with("or-")) {
         cmd.args(["--resume", &sid]);
     }
     cmd.current_dir(&cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -128,7 +182,7 @@ pub fn chat_send(
         let err = stderr_buf.lock().unwrap().trim().to_string();
         let _ = app.emit(
             "chat-done",
-            ChatDone { chat_id: chat_id.clone(), ok, error: (!ok && !err.is_empty()).then_some(err) },
+            ChatDone { chat_id: chat_id.clone(), ok, error: (!ok && !err.is_empty()).then_some(err), code: None },
         );
         if let Some(procs) = tauri::Manager::try_state::<ChatProcesses>(&app) {
             procs.0.lock().unwrap().remove(&chat_id);
@@ -138,9 +192,12 @@ pub fn chat_send(
 }
 
 #[tauri::command]
-pub fn chat_cancel(procs: State<ChatProcesses>, chat_id: String) {
+pub fn chat_cancel(procs: State<ChatProcesses>, cancels: State<ChatCancels>, chat_id: String) {
     if let Some(child) = procs.0.lock().unwrap().remove(&chat_id) {
         let _ = child.lock().unwrap().kill();
+    }
+    if let Some(cancel) = cancels.0.lock().unwrap().get(&chat_id) {
+        cancel.store(true, Ordering::Relaxed);
     }
 }
 
@@ -162,6 +219,38 @@ pub fn chat_save(state: State<AppState>, key: String, data: Value) -> CmdResult<
     let p = chat_file(&state, &key);
     std::fs::create_dir_all(p.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(p, data.to_string()).map_err(|e| e.to_string())
+}
+
+/// One-shot answer from Claude Code without tools.
+pub fn claude_complete(state: &AppState, system: &str, prompt: &str) -> CmdResult<String> {
+    let cwd = state.config_dir.join("chat-workspace");
+    std::fs::create_dir_all(&cwd).map_err(|e| e.to_string())?;
+    let mut cmd = Command::new(claude_bin(state)?);
+    cmd.args(["-p", "--output-format", "json", "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--tools", ""])
+        .arg("--append-system-prompt")
+        .arg(system);
+    let model = state.settings().chat_model;
+    if !model.is_empty() {
+        cmd.args(["--model", &model]);
+    }
+    cmd.current_dir(&cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("failed to start claude: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(prompt.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap_or(Value::Null);
+    let result = v["result"].as_str().unwrap_or_default().to_string();
+    if !out.status.success() || v["is_error"].as_bool() == Some(true) {
+        let err = if result.is_empty() { String::from_utf8_lossy(&out.stderr).trim().to_string() } else { result };
+        return Err(if err.is_empty() { "Claude Code failed".into() } else { err });
+    }
+    Ok(result)
 }
 
 fn run_claude(state: &AppState, args: &[String]) -> CmdResult<String> {

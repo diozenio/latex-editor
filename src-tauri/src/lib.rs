@@ -1,7 +1,9 @@
+mod autocommit;
 mod chat;
 mod commands;
 mod env;
 mod github;
+mod openrouter;
 mod state;
 mod storage;
 mod sync;
@@ -120,6 +122,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(watcher::WatcherHolder::default())
         .manage(chat::ChatProcesses::default())
+        .manage(chat::ChatCancels::default())
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(state::AppState::init(&handle)?);
@@ -225,6 +228,8 @@ pub fn run() {
             chat::chat_cancel,
             chat::chat_load,
             chat::chat_save,
+            openrouter::openrouter_key_info,
+            autocommit::ai_auto_commit,
             usage::claude_usage,
             storage::storage_usage,
             storage::installed_components,

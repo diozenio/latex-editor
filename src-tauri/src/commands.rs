@@ -291,7 +291,7 @@ pub fn synctex_inverse(state: State<AppState>, project: String, page: u32, x: f6
     Ok(synctex_for(&state, &project)?.inverse(page, x, y))
 }
 
-fn identity(state: &AppState, project: &str) -> (String, String) {
+pub(crate) fn identity(state: &AppState, project: &str) -> (String, String) {
     let s = state.settings();
     let (cfg_name, cfg_email) = git::configured_identity(&state.ws(), project);
     let gh = s.github_user.unwrap_or_default();
