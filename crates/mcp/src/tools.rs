@@ -102,7 +102,10 @@ pub fn call(ctx: &Ctx, name: &str, a: &Value) -> R {
             Ok("Moved to trash".into())
         }
         "compile" => {
-            let r = compile::compile(ws, s(a, "project")?, &ctx.toolchain).map_err(e)?;
+            let p = s(a, "project")?;
+            // The assistant always builds from scratch so stale intermediates never show up as errors.
+            compile::clean(ws, p).map_err(e)?;
+            let r = compile::compile(ws, p, &ctx.toolchain).map_err(e)?;
             let mut out = format!(
                 "{} in {} ms. PDF: {}\n",
                 if r.ok { "Compiled successfully" } else { "Compilation FAILED" },
@@ -197,7 +200,7 @@ pub fn definitions() -> Vec<Value> {
         tool("move_path", "Move or rename a file or folder inside a project.",
             json!({ "project": p, "from": path, "to": path }), &["project", "from", "to"]),
         tool("delete_path", "Move a file or folder to the OS trash.", json!({ "project": p, "path": path }), &["project", "path"]),
-        tool("compile", "Compile the project to PDF and return errors and warnings. Markdown documents are typeset through LaTeX.", json!({ "project": p }), &["project"]),
+        tool("compile", "Compile the project to PDF from a clean build and return errors and warnings. Markdown documents are typeset through LaTeX.", json!({ "project": p }), &["project"]),
         tool("get_compile_log", "Return the tail of the last TeX log.", json!({ "project": p }), &["project"]),
         tool("git_status", "Branch, ahead/behind origin, and changed files.", json!({ "project": p }), &["project"]),
         tool("git_init", "Initialize a git repository in the project.", json!({ "project": p }), &["project"]),
