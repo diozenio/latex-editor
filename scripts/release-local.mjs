@@ -106,7 +106,10 @@ try {
   writeFileSync(confPath, originalConf);
 }
 
-const bundleDir = join(root, "src-tauri", "target", target, "release", "bundle");
+const targetDir = JSON.parse(
+  sh("cargo", ["metadata", "--format-version", "1", "--no-deps"]),
+).target_directory;
+const bundleDir = join(targetDir, target, "release", "bundle");
 const pick = (dir, suffix) => {
   const d = join(bundleDir, dir);
   const name = existsSync(d)
