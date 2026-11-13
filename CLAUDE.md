@@ -23,7 +23,8 @@ pnpm exec biome check --write <arquivos> # formata e lint (Biome)
 ## Commits e releases
 
 - **Todo commit passa pela skill `staged-atomic-commits`** (`.claude/skills/`). Nunca rode `git commit` direto: o hook `.claude/hooks/require-commit-skill.sh` bloqueia commits sem o marcador da skill. Não adicione `Co-Authored-By` nem menção a IA.
-- Cada push na `main` gera uma release (`.github/workflows/release.yml`): builda as três plataformas e publica como latest. A versão é `major.minor` do `src-tauri/tauri.conf.json` mais o número do run como patch; para mudar major/minor, edite só o `tauri.conf.json`.
+- O workflow de release (`.github/workflows/release.yml`) roda só manualmente (Actions → Release → Run workflow, ou `gh workflow run release.yml`): builda as três plataformas e publica como latest. A versão é `major.minor` do `src-tauri/tauri.conf.json` mais o número do run como patch; para mudar major/minor, edite só o `tauri.conf.json`.
+- Release local (sem Actions): `pnpm release:local` em cada máquina, no mesmo commit já enviado. A primeira cria a release como rascunho, as seguintes reaproveitam, e quando Windows e macOS estiverem no `latest.json` ela é publicada como latest.
 
 ## Convenções de código
 
