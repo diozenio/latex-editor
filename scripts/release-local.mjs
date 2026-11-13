@@ -64,31 +64,26 @@ if (process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD === undefined) {
     : "";
 }
 
-const releases = JSON.parse(
-  gh(["api", `repos/${repo}/releases?per_page=50`]),
-);
+const fetchReleases = () =>
+  JSON.parse(gh(["api", `repos/${repo}/releases?per_page=50`]));
+const findRelease = (releases) =>
+  releases.find((r) => r.target_commitish === sha && r.tag_name.startsWith("v"));
+const releases = fetchReleases();
 const conf = JSON.parse(readFileSync(confPath, "utf8"));
 const majorMinor = conf.version.split(".").slice(0, 2).join(".");
-let release = releases.find(
-  (r) => r.target_commitish === sha && r.tag_name.startsWith("v"),
-);
-if (!release) {
+let release = findRelease(releases);
+let tag;
+if (release) {
+  tag = release.tag_name;
+  console.log(`✓ reusing ${tag} for ${sha.slice(0, 7)}`);
+} else {
   const patches = releases
     .map((r) => r.tag_name.match(new RegExp(`^v${majorMinor.replace(".", "\\.")}\\.(\\d+)$`)))
     .filter(Boolean)
     .map((m) => Number(m[1]));
-  const tag = `v${majorMinor}.${Math.max(0, ...patches) + 1}`;
-  const notes = sh("git", ["log", "-1", "--format=%B"]).trim();
-  gh([
-    "release", "create", tag, "--repo", repo, "--draft", "--target", sha,
-    "--title", `QuillTex ${tag}`, "--notes", notes,
-  ]);
-  release = { tag_name: tag, draft: true };
-  console.log(`✓ created draft ${tag}`);
-} else {
-  console.log(`✓ reusing ${release.tag_name} for ${sha.slice(0, 7)}`);
+  tag = `v${majorMinor}.${Math.max(0, ...patches) + 1}`;
+  console.log(`… building ${tag}, the release is created only if everything succeeds`);
 }
-const tag = release.tag_name;
 const version = tag.slice(1);
 
 if (!args.includes("--skip-tests"))
@@ -156,6 +151,23 @@ if (os === "windows") {
   addUpdater([`linux-${arch}-deb`], pick("deb", ".deb"));
 }
 
+let created = false;
+if (!release) {
+  release = findRelease(fetchReleases());
+  if (release && release.tag_name !== tag)
+    fail(`${release.tag_name} was created for ${sha.slice(0, 7)} during the build, but this build is ${tag}; run again`);
+  if (!release) {
+    const notes = sh("git", ["log", "-1", "--format=%B"]).trim();
+    gh([
+      "release", "create", tag, "--repo", repo, "--draft", "--target", sha,
+      "--title", `QuillTex ${tag}`, "--notes", notes,
+    ]);
+    release = { tag_name: tag, draft: true };
+    created = true;
+    console.log(`✓ created draft ${tag}`);
+  }
+}
+
 const latestPath = join(staging, "latest.json");
 let latest = { version, notes: "", pub_date: new Date().toISOString(), platforms: {} };
 try {
@@ -176,7 +188,15 @@ for (const [key, { asset, sig }] of Object.entries(updater)) {
 writeFileSync(latestPath, `${JSON.stringify(latest, null, 2)}\n`);
 uploads.push(latestPath);
 
-gh(["release", "upload", tag, "--repo", repo, "--clobber", ...uploads]);
+try {
+  gh(["release", "upload", tag, "--repo", repo, "--clobber", ...uploads]);
+} catch (e) {
+  if (created) {
+    gh(["release", "delete", tag, "--repo", repo, "--yes"]);
+    console.error(`✗ upload failed, deleted draft ${tag}`);
+  }
+  throw e;
+}
 rmSync(staging, { recursive: true, force: true });
 console.log(`✓ uploaded ${os} build to ${tag}`);
 
