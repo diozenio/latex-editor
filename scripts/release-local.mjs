@@ -1,15 +1,4 @@
 #!/usr/bin/env node
-// Builds the app for the host platform and adds it to the GitHub release of
-// the current commit, mirroring .github/workflows/release.yml. Run it on each
-// machine (Windows, macOS, Linux) for the same commit: the first run creates
-// a draft release, the others reuse it, and once Windows and macOS are both
-// in latest.json the release is published as latest.
-//
-//   node scripts/release-local.mjs [--skip-tests] [--publish | --no-publish]
-//
-// Signing key: TAURI_SIGNING_PRIVATE_KEY (content or path) or
-// ~/.tauri/quilltex.key; password: TAURI_SIGNING_PRIVATE_KEY_PASSWORD or
-// ~/.tauri/quilltex.key.password.
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
@@ -54,7 +43,6 @@ const repo = sh("git", ["remote", "get-url", "origin"])
   .trim()
   .match(/github\.com[:/](.+?)(?:\.git)?$/)[1];
 
-// 1. Commit checks: the release points at a commit that must exist on GitHub.
 if (!args.includes("--allow-dirty") && sh("git", ["status", "--porcelain"]).trim())
   fail("working tree has uncommitted changes (use --allow-dirty to ignore)");
 const sha = sh("git", ["rev-parse", "HEAD"]).trim();
@@ -62,7 +50,6 @@ run("git", ["fetch", "origin", "--quiet"]);
 if (!sh("git", ["branch", "-r", "--contains", sha]).trim())
   fail(`${sha.slice(0, 7)} is not on origin yet, push it first`);
 
-// 2. Signing key for the updater artifacts.
 const keyFile = join(homedir(), ".tauri", "quilltex.key");
 const signEnv = {};
 if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
@@ -77,7 +64,6 @@ if (process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD === undefined) {
     : "";
 }
 
-// 3. Find the release for this commit, or create a draft with the next patch.
 const releases = JSON.parse(
   gh(["api", `repos/${repo}/releases?per_page=50`]),
 );
@@ -105,8 +91,6 @@ if (!release) {
 const tag = release.tag_name;
 const version = tag.slice(1);
 
-// 4. Tests, engines and build, with the release version written into the
-// config only for the duration of the build.
 if (!args.includes("--skip-tests"))
   run("cargo", ["test", "-p", "quilltex-core", "-p", "quilltex-mcp"]);
 run("node", [
@@ -121,13 +105,12 @@ try {
   writeFileSync(confPath, `${JSON.stringify({ ...conf, version }, null, 2)}\n`);
   run("node", [tauriCli, "build", "--target", target], {
     ...signEnv,
-    ...(os === "darwin" ? { APPLE_SIGNING_IDENTITY: "-" } : {}),
+    ...(os === "darwin" ? { APPLE_SIGNING_IDENTITY: "-", CI: "true" } : {}),
   });
 } finally {
   writeFileSync(confPath, originalConf);
 }
 
-// 5. Collect the bundles, named like tauri-action does.
 const bundleDir = join(root, "src-tauri", "target", target, "release", "bundle");
 const pick = (dir, suffix) => {
   const d = join(bundleDir, dir);
@@ -146,7 +129,7 @@ const stage = (file, name = file.split(/[\\/]/).pop()) => {
   uploads.push(dest);
   return name;
 };
-const updater = {}; // latest.json platform key -> asset name
+const updater = {};
 const addUpdater = (keys, file, name) => {
   const asset = stage(file, name);
   const sig = readFileSync(`${file}.sig`, "utf8").trim();
@@ -173,7 +156,6 @@ if (os === "windows") {
   addUpdater([`linux-${arch}-deb`], pick("deb", ".deb"));
 }
 
-// 6. Merge this platform into the release's latest.json.
 const latestPath = join(staging, "latest.json");
 let latest = { version, notes: "", pub_date: new Date().toISOString(), platforms: {} };
 try {
@@ -198,7 +180,6 @@ gh(["release", "upload", tag, "--repo", repo, "--clobber", ...uploads]);
 rmSync(staging, { recursive: true, force: true });
 console.log(`✓ uploaded ${os} build to ${tag}`);
 
-// 7. Publish once Windows and macOS are both in (or when forced).
 const platforms = Object.keys(latest.platforms);
 const complete = ["windows-", "darwin-"].every((p) =>
   platforms.some((k) => k.startsWith(p)),
